@@ -1,142 +1,245 @@
 import streamlit as st
+
 import pandas as pd
+
 import plotly.express as px
+
 import plotly.graph_objects as go
+
 import urllib.parse
+
 import numpy as np
 
+
+
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Cenoa Analytics 2025 | V53.0", layout="wide")
+
+st.set_page_config(page_title="Dashboard Grupo Cenoa V43.1", layout="wide")
+
+
 
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 
-# --- 2. CSS PREMIUM (Sidebar + Tablas) ---
+if 'det_sel' not in st.session_state: st.session_state.det_sel = None
+
+
+
+# --- 2. CSS PREMIUM ---
+
 st.markdown("""
+
     <style>
+
     [data-testid="stSidebar"] { background-color: #263238 !important; min-width: 320px !important; }
+
     [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label { padding: 12px 20px !important; background-color: transparent !important; border-radius: 10px !important; margin-bottom: 8px !important; position: relative; }
-    [data-testid="stRadio"] label p { color: #cfd8dc !important; font-size: 1.05rem !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; }
+
+    [data-testid="stRadio"] div[role="radiogroup"] label { padding: 12px 20px !important; background-color: transparent !important; border-radius: 10px !important; margin-bottom: 8px !important; transition: all 0.3s ease; position: relative; }
+
+    [data-testid="stRadio"] label p { color: #cfd8dc !important; font-size: 1.05rem !important; font-weight: 500 !important; }
+
+    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
 
-    /* Separadores de Bloques Sidebar */
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1) { margin-top: 40px !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before { content: "GESTIÓN RRHH"; position: absolute; top: -35px; left: 10px; color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5) { margin-top: 60px !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5)::before { content: "GESTIÓN COMERCIAL"; position: absolute; top: -35px; left: 10px; color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px; border-top: 1px solid rgba(144, 164, 174, 0.2); padding-top: 15px; width: 100%; }
 
-    .kpi-card { background-color: #ffffff; border-radius: 15px; padding: 20px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+    /* Inyección de Títulos de Bloque */
+
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1) { margin-top: 40px !important; }
+
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before {
+
+        content: "GESTIÓN RRHH"; position: absolute; top: -35px; left: 10px;
+
+        color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px;
+
+    }
+
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5) { margin-top: 60px !important; }
+
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5)::before {
+
+        content: "GESTIÓN COMERCIAL"; position: absolute; top: -35px; left: 10px;
+
+        color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px;
+
+        border-top: 1px solid rgba(144, 164, 174, 0.2); padding-top: 15px; width: 100%;
+
+    }
+
+
+
+    /* Estilos de KPI y Botones */
+
+    .kpi-card { background-color: #ffffff; border-radius: 15px; padding: 15px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+    .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; transition: 0.3s; }
+
+    
+
+    /* Resaltado especial para botones de "Sin Dato" */
+
+    .btn-audit button { border: 1px dashed #e74c3c !important; color: #e74c3c !important; }
+
     </style>
+
     """, unsafe_allow_html=True)
 
-# --- 3. MOTOR DE CARGA (SOLO 2025 PARA COMERCIAL) ---
+
+
+# --- 3. CARGA DE DATOS ---
+
 @st.cache_data(ttl=60)
-def load_data_v53():
-    URL_BASE = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
+
+def load_all_data():
+
+    URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
+
     try:
-        def fetch(sheet):
-            p = urllib.parse.quote(sheet)
-            # Forzamos lectura amplia para capturar AH (33) y AI (34)
-            csv_url = f"{URL_BASE.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={p}&range=A1:AJ2000"
-            df = pd.read_csv(csv_url)
-            df.columns = [str(c).strip() for c in df.columns]
-            return df
 
-        # Carga RRHH
-        df_des = fetch("DESEMPEÑO")
-        m_rrhh = {'nombre': df_des.columns[1], 'empresa': df_des.columns[2], 'localidad': df_des.columns[3],
-                  'area': df_des.columns[4], 'puesto': df_des.columns[5],
-                  'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'}
+        sheet_name = urllib.parse.quote("DESEMPEÑO")
 
-        # Carga Comercial SOLO 2025
-        df_2025 = fetch("PERFO COMERCIAL 2025")
+        csv_url = f"{URL.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+
+        df = pd.read_csv(csv_url)
+
+        df.columns = df.columns.str.strip()
+
+        m = {
+
+            'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
+
+            'area': df.columns[4], 'puesto': df.columns[5],
+
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 
+
+            'tablero': '% ACUMULADO TABLERO', 
+
+            'final': 'DESEMPEÑO'
+
+        }
+
+        df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
+
+        # Backup de datos crudos para auditoría
+
+        df['raw_comp'] = df[m['comp']].astype(str).str.strip()
+
+        df['raw_tab'] = df[m['tablero']].astype(str).str.strip()
+
         
-        # Mapeo Seguro basado en tus especificaciones (C=2, E=4, F=5, G=6, H=7, I=8, AH=33, AI=34)
-        if df_2025.shape[1] >= 35:
-            df_2025.rename(columns={
-                df_2025.columns[2]: 'VENDEDOR', 
-                df_2025.columns[4]: 'ANTIGÜEDAD',
-                df_2025.columns[5]: 'EMPRESA', 
-                df_2025.columns[6]: 'LOCALIDAD',
-                df_2025.columns[7]: 'CANAL', 
-                df_2025.columns[8]: 'OBJETIVO',
-                df_2025.columns[33]: 'TOTAL_OPS', 
-                df_2025.columns[34]: 'PROM_VENTAS'
-            }, inplace=True)
-            df_2025['VENDEDOR'] = df_2025['VENDEDOR'].astype(str).str.upper().str.strip()
-        
-        return df_des, df_2025, m_rrhh
-    except Exception as e:
-        st.error(f"Error al conectar con Google Sheets: {e}")
-        return None, None, None
 
-df_rrhh, df_p25, m_rrhh = load_data_v53()
+        for k in ['comp', 'tablero', 'final']:
+
+            df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
+
+        
+
+        df['Sem_Comp'] = df[m['comp']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
+
+        df['Sem_Tab'] = df[m['tablero']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
+
+        df['Inic'] = df[m['nombre']].apply(lambda x: (x.split()[0][0] + (x.split()[1][0] if len(x.split())>1 else "")).upper() if len(x)>3 else "")
+
+        return df, m
+
+    except: return None, None
+
+
+
+df_raw, m = load_all_data()
+
+
 
 # --- 4. SIDEBAR ---
+
 with st.sidebar:
+
     st.title("Grupo Cenoa")
-    menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "🥇 Ranking Comercial", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
-    st.session_state.pagina = st.radio("Nav", menu, index=menu.index(st.session_state.pagina), label_visibility="collapsed")
+
+    st.caption("Dashboard 2026 | V43.1")
+
+    menu_items = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "🥇 Ranking Comercial", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
+
+    seleccion = st.radio("Nav", menu_items, index=menu_items.index(st.session_state.pagina) if st.session_state.pagina in menu_items else 0, label_visibility="collapsed")
+
+    if st.session_state.pagina != seleccion:
+
+        st.session_state.pagina = seleccion
+
+        st.session_state.det_sel = None
+
+        st.rerun()
+
+
 
 # --- 5. PANEL PRINCIPAL ---
-if df_p25 is not None:
+
+if df_raw is not None:
+
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # --- PÁGINA: RANKING COMERCIAL (EXCLUSIVO 2025) ---
-    if st.session_state.pagina == "🥇 Ranking Comercial":
-        # Verificamos si las columnas existen tras el mapeo
-        if 'LOCALIDAD' not in df_p25.columns:
-            st.error("No se detectó la columna LOCALIDAD en la solapa 2025. Verifique el formato del Excel.")
-        else:
-            # Filtros Analytics
-            f1, f2, f3, f4 = st.columns([1, 1.5, 1.5, 2])
-            with f1: f_mes = st.selectbox("MES", ["TOTAL", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"])
-            with f2: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_p25['EMPRESA'].dropna().unique().tolist()))
-            with f3: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_p25['LOCALIDAD'].dropna().unique().tolist()))
-            with f4: f_can = st.selectbox("CANAL DE VENTA", ["Todos"] + sorted(df_p25['CANAL'].dropna().unique().tolist()))
 
-            # Procesamiento de Datos
-            df_f = df_p25.copy()
-            if f_emp != "Todas": df_f = df_f[df_f['EMPRESA'] == f_emp]
-            if f_loc != "Todas": df_f = df_f[df_f[m_rrhh['localidad']] == f_loc] # Usamos el mapeo para mayor seguridad
-            if f_can != "Todos": df_f = df_f[df_f['CANAL'] == f_can]
 
-            # Mapeo de columnas de operaciones (J, L, N, P...)
-            meses_map = {"TOTAL": 33, "Ene": 9, "Feb": 11, "Mar": 13, "Abr": 15, "May": 17, "Jun": 19, "Jul": 21, "Ago": 23, "Sep": 25, "Oct": 27, "Nov": 29, "Dic": 31}
-            idx_target = meses_map[f_mes]
-            
-            df_f['Ops_Mes'] = pd.to_numeric(df_f.iloc[:, idx_target].astype(str).str.replace('-', '0'), errors='coerce').fillna(0)
-            df_f['Obj'] = pd.to_numeric(df_f['OBJETIVO'].astype(str).str.replace('-', '0'), errors='coerce').fillna(0)
+    # FILTROS
 
-            # KPI CARDS
-            k1, k2, k3 = st.columns(3)
-            k1.markdown(f'<div class="kpi-card"><b>Vendedores</b><br><h3>{len(df_f)}</h3></div>', unsafe_allow_html=True)
-            k2.markdown(f'<div class="kpi-card"><b>Total Ops {f_mes}</b><br><h3>{int(df_f["Ops_Mes"].sum())}</h3></div>', unsafe_allow_html=True)
-            cumplimiento = (df_f['Ops_Mes'].sum() / df_f['Obj'].sum() * 100) if df_f['Obj'].sum() > 0 else 0
-            k3.markdown(f'<div class="kpi-card"><b>% Cumplimiento</b><br><h3 style="color:#27ae60;">{cumplimiento:.1f}%</h3></div>', unsafe_allow_html=True)
+    cf1, cf2, cf3, cf4, ckpi = st.columns([1.5, 1.5, 1.5, 2.5, 1])
 
-            st.divider()
+    with cf1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
 
-            # RANKING TOP 10
-            st.subheader(f"🏆 Top 10 Vendedores - Perfo 2025 ({f_mes})")
-            top_10 = df_f.sort_values(by='Ops_Mes', ascending=False).head(10)
-            
-            fig = px.bar(top_10, x='Ops_Mes', y='VENDEDOR', orientation='h', text='Ops_Mes',
-                         color='Ops_Mes', color_continuous_scale='Greens')
-            fig.update_layout(yaxis={'categoryorder':'total ascending'}, height=450, template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
+    with cf2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
 
-            # DETALLE OPERATIVO
-            st.subheader("📋 Detalle Auditoría - People Analytics")
-            df_det = df_f[['VENDEDOR', 'ANTIGÜEDAD', 'EMPRESA', 'LOCALIDAD', 'CANAL', 'Ops_Mes', 'PROM_VENTAS']]
-            df_det.columns = ["Vendedor", "Antigüedad", "Empresa", "Localidad", "Canal", f"Ventas {f_mes}", "Promedio Hist."]
-            st.dataframe(df_det.sort_values(by=f"Ventas {f_mes}", ascending=False), use_container_width=True)
+    with cf3: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
 
-    # --- RESTO DE PÁGINAS (RRHH) ---
-    elif st.session_state.pagina == "👤 Desempeño Gral.":
-        st.info("Pestaña de RRHH activa. Cargando datos de solapa DESEMPEÑO...")
-        # Aquí continúa tu lógica ya blindada anteriormente
+    
 
-else:
-    st.error("No se pudo cargar la solapa PERFO COMERCIAL 2025. Por favor, verifica que el nombre sea exacto en el Google Sheets.")
+    df_f = df_raw.copy()
+
+    if f_emp != "Todas": df_f = df_f[df_f[m['empresa']] == f_emp]
+
+    if f_loc != "Todas": df_f = df_f[df_f[m['localidad']] == f_loc]
+
+    if f_are != "Todas": df_f = df_f[df_f[m['area']] == f_are]
+
+
+
+    nombres_disp = sorted(df_f[m['nombre']].unique().tolist())
+
+    with cf4: f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disp)
+
+    df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
+
+    
+
+    with ckpi:
+
+        st.markdown(f'<div class="kpi-card"><span style="font-size:0.6rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+
+    st.divider()
+
+
+
+    # --- PÁGINA: DESEMPEÑO GRAL ---
+
+    if "Desempeño Gral." in st.session_state.pagina:
+
+        cats_g = {"ESTRELLA": df_final[df_final[m['final']] >= 90], "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)], "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)], "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)], "RIESGO": df_final[df_final[m['final']] < 60]}
+
+        cb = st.columns(5)
+
+        for i, (k, v) in enumerate(cats_g.items()):
+
+            if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
+
+        if st.session_state.det_sel in cats_g:
+
+            st.write(f"### Detalle: {st.session_state.det_sel}"); st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+
+            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+
+        fig = px.scatter(df_final.dropna(subset=[m['comp'], m['tablero']]), x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'],error("No se pudo cargar la solapa PERFO COMERCIAL 2025. Por favor, verifica que el nombre sea exacto en el Google Sheets.")
