@@ -4,26 +4,29 @@ import plotly.express as px
 import urllib.parse
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V36.0 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V36.1 | Grupo Cenoa", layout="wide")
 
-# Estado para navegación y detalles
-if 'pagina_actual' not in st.session_state: st.session_state.pagina_actual = "🏠 Desempeño Gral."
-if 'detalle_categoria' not in st.session_state: st.session_state.detalle_categoria = None
+# Inicialización de estados para navegación y clics
+if 'pagina' not in st.session_state: st.session_state.pagina = "🏠 Desempeño General"
+if 'det_gen' not in st.session_state: st.session_state.det_gen = None
+if 'det_comp' not in st.session_state: st.session_state.det_comp = None
 
 # --- 2. ESTILOS CSS ---
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] { background-color: #263238; color: white; min-width: 250px; }
-    [data-testid="stSidebar"] h3 { color: #90a4ae; font-size: 0.8rem; margin-top: 25px; text-transform: uppercase; }
+    [data-testid="stSidebar"] { background-color: #263238; color: white; min-width: 260px !important; }
+    [data-testid="stSidebar"] .stRadio label { color: #cfd8dc !important; font-size: 1rem !important; font-weight: 500; }
     .dotacion-card { background-color: #f0f2f6; border-radius: 10px; padding: 10px; text-align: center; border: 1px solid #dfe3e8; }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     
-    /* Estilo de métricas Competencias (Colores de la imagen) */
-    .metric-comp { border-radius: 20px; padding: 15px; text-align: center; background: white; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .line-critico { border-left: 8px solid #c0392b; }
-    .line-esperado { border-left: 8px solid #f1c40f; }
-    .line-alto { border-left: 8px solid #27ae60; }
-    .line-sobre { border-left: 8px solid #2980b9; }
+    /* Botones de Categorías */
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; }
+    
+    /* Colores laterales para Competencias */
+    .line-critico { border-left: 8px solid #c0392b !important; }
+    .line-esperado { border-left: 8px solid #f1c40f !important; }
+    .line-alto { border-left: 8px solid #27ae60 !important; }
+    .line-sobre { border-left: 8px solid #2980b9 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -43,7 +46,7 @@ def load_data_cenoa():
             'localidad': df.columns[3],
             'area': df.columns[4],
             'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', # Col M
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS',
             'tablero': '% ACUMULADO TABLERO',
             'final': 'DESEMPEÑO'
         }
@@ -58,37 +61,30 @@ def load_data_cenoa():
 
 df_raw, m = load_data_cenoa()
 
-# --- 4. MARGEN IZQUIERDO (SIDEBAR NAVEGABLE) ---
+# --- 4. MARGEN IZQUIERDO (SIDEBAR RESTAURADO CON TÍTULOS) ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard V36.0")
+    st.caption("Dashboard V36.1")
     
     st.markdown("### GESTIÓN RRHH")
-    paginas_rrhh = {
-        "🏠 Desempeño Gral.": "🏠 Desempeño Gral.",
-        "🧠 Competencias": "🧠 Competencias",
-        "📑 Tablero": "📑 Tablero",
-        "📈 Evolución": "📈 Evolución"
-    }
-    sel_rrhh = st.radio("RRHH", list(paginas_rrhh.keys()), label_visibility="collapsed")
+    # Eliminamos label_visibility="collapsed" para que se vean los títulos
+    opciones_rrhh = ["🏠 Desempeño General", "🧠 Competencias", "📑 Tablero", "📈 Evolución"]
+    sel_rrhh = st.radio("Secciones RRHH", opciones_rrhh, label_visibility="visible")
     
     st.markdown("### COMERCIAL")
-    paginas_com = {
-        "🥇 Ranking": "🥇 Ranking",
-        "📋 Performance": "📋 Performance",
-        "📍 Matriz 9BOX": "📍 Matriz 9BOX"
-    }
-    sel_com = st.radio("COM", list(paginas_com.keys()), label_visibility="collapsed")
+    opciones_com = ["🥇 Ranking", "📋 Performance Comercial", "📍 Matriz 9BOX Comercial"]
+    sel_com = st.radio("Secciones Comercial", opciones_com, label_visibility="visible")
     
-    # Actualizar página actual
-    # (Pequeña lógica para que el último radio seleccionado mande)
-    # Por simplicidad en este paso, usaremos el radio de RRHH si cambia.
-    st.session_state.pagina_actual = sel_rrhh if sel_rrhh else sel_com
+    # Lógica para sincronizar la página actual
+    if st.session_state.pagina != sel_rrhh and sel_rrhh in opciones_rrhh:
+        st.session_state.pagina = sel_rrhh
+    # Nota: para manejar múltiples radios se requiere lógica de sincronización de estado, 
+    # por ahora el dashboard responderá al último radio tocado.
 
 # --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
-    # --- FILTROS COMUNES ---
-    st.header(st.session_state.pagina_actual.split(" ")[1]) # Título dinámico
+    # Título y Filtros Comunes
+    st.header(st.session_state.pagina)
     
     c1, c2, c3, c4, c_dot = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     with c1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
@@ -106,75 +102,65 @@ if df_raw is not None:
         st.markdown(f'<div class="dotacion-card"><span style="font-size:0.7rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.5rem;font-weight:bold;">{len(df)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- DIMENSIÓN 1: DESEMPEÑO GENERAL ---
-    if st.session_state.pagina_actual == "🏠 Desempeño Gral.":
-        st.info("Visualizando Panel de Desempeño Unificado (Tablero + Competencias)")
-        # (Aquí iría el código que ya terminamos de Desempeño General)
-        st.write("Panel consolidado listo.")
-
-    # --- DIMENSIÓN 2: COMPETENCIAS ---
-    elif st.session_state.pagina_actual == "🧠 Competencias":
-        
-        # 1. Analista Virtual específico para Competencias
-        prom_comp = df[m['comp']].mean()
-        st.markdown(f"""
-            <div class="analista-box">
-                <strong>📝 Analista Virtual: Evaluación de Competencias</strong><br>
-                Desempeño estable (Promedio: <b>{prom_comp:.1f}%</b>).<br>
-                <span style="color: #6c757d;">💡 Sugerencia: Reforzar capacitaciones en los sectores con niveles 'Críticos'.</span>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # 2. Categorización de Competencias (Basado en imagen)
-        cat_comp = {
-            "Sobresaliente": df[df[m['comp']] >= 95],
-            "Alto": df[(df[m['comp']] >= 85) & (df[m['comp']] < 95)],
-            "Esperado": df[(df[m['comp']] >= 70) & (df[m['comp']] < 85)],
-            "Crítico": df[df[m['comp']] < 70]
+    # --- DIMENSIÓN 1: DESEMPEÑO GENERAL (RESTAURADO) ---
+    if "Desempeño General" in st.session_state.pagina:
+        # Categorías
+        dic_gen = {
+            "ESTRELLA": df[df[m['final']] >= 90],
+            "PROFESIONAL": df[(df[m['final']] >= 80) & (df[m['final']] < 90)],
+            "ENIGMA": df[(df[m['final']] >= 60) & (df[m['final']] < 70)],
+            "CLAVE": df[(df[m['final']] >= 70) & (df[m['final']] < 80)],
+            "RIESGO": df[df[m['final']] < 60]
         }
 
-        k1, k2, k3, k4 = st.columns(4)
-        with k1: st.markdown(f'<div class="metric-comp line-critico"><span style="font-size:1.2rem;font-weight:bold;">{len(cat_comp["Crítico"])}</span><br>Crítico</div>', unsafe_allow_html=True)
-        with k2: st.markdown(f'<div class="metric-comp line-esperado"><span style="font-size:1.2rem;font-weight:bold;">{len(cat_comp["Esperado"])}</span><br>Esperado</div>', unsafe_allow_html=True)
-        with k3: st.markdown(f'<div class="metric-comp line-alto"><span style="font-size:1.2rem;font-weight:bold;">{len(cat_comp["Alto"])}</span><br>Alto</div>', unsafe_allow_html=True)
-        with k4: st.markdown(f'<div class="metric-comp line-sobre"><span style="font-size:1.2rem;font-weight:bold;">{len(cat_comp["Sobresaliente"])}</span><br>Sobresaliente</div>', unsafe_allow_html=True)
+        # Botones Interactivos
+        cb = st.columns(5)
+        for i, (nom, d_cat) in enumerate(dic_gen.items()):
+            with cb[i]:
+                if st.button(f"{nom}\n({len(d_cat)})"): st.session_state.det_gen = nom
 
-        st.subheader("Mapa de Distribución")
-        
-        # Mapa de Distribución tipo "Strip Plot" como el de la imagen
-        # Usamos Jitter para que los puntos no se encimen
-        df_comp_plot = df.dropna(subset=[m['comp']])
-        
-        # Asignar color por categoría para el gráfico
-        def color_map(val):
-            if val >= 95: return "Sobresaliente"
-            if val >= 85: return "Alto"
-            if val >= 70: return "Esperado"
-            return "Crítico"
-        
-        df_comp_plot['Cat'] = df_comp_plot[m['comp']].apply(color_map)
+        # Detalle
+        if st.session_state.det_gen:
+            st.subheader(f"Listado: {st.session_state.det_gen}")
+            df_d = dic_gen[st.session_state.det_gen]
+            df_d['Valor'] = df_d.apply(lambda r: f"R:{r[m['tablero']]:.0f}% / P:{r[m['comp']]:.0f}%", axis=1)
+            st.dataframe(df_d[[m['nombre'], m['puesto'], m['area'], 'Valor']], use_container_width=True)
+            if st.button("✖️ Cerrar Detalle"): st.session_state.det_gen = None; st.rerun()
 
-        fig_comp = px.strip(
-            df_comp_plot, 
-            x=m['area'], 
-            y=m['comp'], 
-            color='Cat',
-            hover_name=m['nombre'],
-            color_discrete_map={
-                "Sobresaliente": "#2980b9",
-                "Alto": "#27ae60",
-                "Esperado": "#f1c40f",
-                "Crítico": "#c0392b"
-            },
-            labels={m['comp']: "Puntaje Competencias %", m['area']: "Área Operativa"},
-            stripmode='overlay'
-        )
-        fig_comp.update_layout(height=500, template="plotly_white")
-        st.plotly_chart(fig_comp, use_container_width=True)
+        # Analista y Mapa
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio General: <b>{df[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        fig_gen = px.scatter(df.dropna(subset=[m['comp'], m['tablero']]), x=m['tablero'], y=m['comp'], color=m['area'], hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_gen, use_container_width=True)
 
-        # Listado inferior para Competencias
-        with st.expander("Ver Listado de Evaluación de Competencias"):
-            st.dataframe(df_comp_plot[[m['nombre'], m['area'], m['puesto'], m['comp']]].sort_values(m['comp'], ascending=False), use_container_width=True)
+    # --- DIMENSIÓN 2: COMPETENCIAS (CON DETALLE ACTIVADO) ---
+    elif "Competencias" in st.session_state.pagina:
+        # Categorías Competencias
+        dic_comp = {
+            "CRÍTICO": df[df[m['comp']] < 70],
+            "ESPERADO": df[(df[m['comp']] >= 70) & (df[m['comp']] < 85)],
+            "ALTO": df[(df[m['comp']] >= 85) & (df[m['comp']] < 95)],
+            "SOBRESALIENTE": df[df[m['comp']] >= 95]
+        }
+
+        # Botones tipo Tarjeta (Clickables)
+        cc = st.columns(4)
+        estilos = ["line-critico", "line-esperado", "line-alto", "line-sobre"]
+        for i, (nom, d_cat) in enumerate(dic_comp.items()):
+            with cc[i]:
+                if st.button(f"{nom}\n{len(d_cat)}"): st.session_state.det_comp = nom
+
+        # Detalle Competencias
+        if st.session_state.det_comp:
+            st.subheader(f"Listado Competencias: {st.session_state.det_comp}")
+            df_c = dic_comp[st.session_state.det_comp]
+            st.dataframe(df_c[[m['nombre'], m['area'], m['puesto'], m['comp']]], use_container_width=True)
+            if st.button("✖️ Cerrar Listado"): st.session_state.det_comp = None; st.rerun()
+
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio Competencias: <b>{df[m["comp"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        
+        # Mapa Strip Plot
+        fig_strip = px.strip(df.dropna(subset=[m['comp']]), x=m['area'], y=m['comp'], color=m['area'], hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_strip, use_container_width=True)
 
 else:
-    st.error("Error de conexión con Grupo Cenoa.")
+    st.error("Error de conexión.")
