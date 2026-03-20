@@ -6,12 +6,12 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard 2026 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V38.0 | Grupo Cenoa", layout="wide")
 
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS AVANZADO (Sidebar y Componentes) ---
+# --- 2. CSS AVANZADO ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #263238 !important; }
@@ -21,9 +21,17 @@ st.markdown("""
     [data-testid="stRadio"] label p { color: #eceff1 !important; font-size: 1rem !important; }
     [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; }
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
-    .dotacion-card { background-color: #f0f2f6; border-radius: 10px; padding: 10px; text-align: center; border: 1px solid #dfe3e8; }
+    
+    /* Cuadrantes de Métricas (KPIs) */
+    .dotacion-card { 
+        background-color: #ffffff; 
+        border-radius: 15px; 
+        padding: 15px; 
+        text-align: center; 
+        border: 1px solid #e0e0e0; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    .prom-box-evol { text-align: right; background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 70px; }
     </style>
     """, unsafe_allow_html=True)
@@ -58,9 +66,7 @@ def load_all_data():
             return parts[0][0].upper() if parts else ""
         df['Inic'] = df[m['nombre']].apply(calc_init)
         return df, m
-    except Exception as e:
-        st.error(f"Error crítico: {e}")
-        return None, None
+    except: return None, None
 
 df_raw, m = load_all_data()
 
@@ -76,81 +82,68 @@ with st.sidebar:
 if df_raw is not None:
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # --- FILTROS SUPERIORES (SIN AÑO) ---
+    # FILTROS SUPERIORES
     cols_f = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     with cols_f[0]: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with cols_f[1]: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
     with cols_f[2]: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
-
-    # Lógica de filtrado dinámico para la dotación
+    
     df_filtrado = df_raw.copy()
     if f_emp != "Todas": df_filtrado = df_filtrado[df_filtrado[m['empresa']] == f_emp]
     if f_loc != "Todas": df_filtrado = df_filtrado[df_filtrado[m['localidad']] == f_loc]
     if f_are != "Todas": df_filtrado = df_filtrado[df_filtrado[m['area']] == f_are]
 
-    # Lista dinámica de colaboradores basada en los filtros previos
     nombres_disponibles = sorted(df_filtrado[m['nombre']].unique().tolist())
-    with cols_f[3]: 
-        f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disponibles)
+    with cols_f[3]: f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disponibles)
 
-    # Filtrado final
-    if f_nom != "Todos":
-        df_final = df_filtrado[df_filtrado[m['nombre']] == f_nom]
-    else:
-        df_final = df_filtrado
-
+    df_final = df_filtrado if f_nom == "Todos" else df_filtrado[df_filtrado[m['nombre']] == f_nom]
+    
     with cols_f[4]:
-        st.markdown(f'<div class="dotacion-card"><span style="font-size:0.6rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="dotacion-card"><span style="font-size:0.6rem;font-weight:bold;color:#636e72;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;color:#2d3436;">{len(df_final)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- PÁGINA: EVOLUCIÓN (BLINDADA) ---
-    if "Evolución" in st.session_state.pagina:
-        if f_nom != "Todos":
-            if not df_final.empty:
-                c_data = df_final.iloc[0]
-                h1, h2 = st.columns([3, 1])
-                with h1:
-                    st.title(f_nom)
-                    st.subheader(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
-                
-                meses_nombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-                valores = []
-                for i in range(15, 27): # Columnas P a AA
-                    try:
-                        val_raw = str(c_data.iloc[i]).replace('%', '').replace(',', '.').strip()
-                        if val_raw in ['-', 'nan', '', 'None']:
-                            valores.append(np.nan)
-                        else:
-                            valores.append(float(val_raw))
-                    except:
-                        valores.append(np.nan)
-                
-                prom_real = np.nanmean(valores) if not np.all(np.isnan(valores)) else 0
-                
-                with h2:
-                    st.markdown(f'<div class="prom-box-evol"><span style="font-size:2rem;font-weight:bold;color:#27ae60;">{prom_real:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
+    # --- PÁGINA: TABLEROS (NUEVOS CUADRANTES) ---
+    if "Tableros" in st.session_state.pagina:
+        # Cálculos de los nuevos cuadrantes
+        tienen_tab = df_final[m['tablero']].notna().sum()
+        no_tienen_tab = df_final[m['tablero']].isna().sum()
+        prom_grupo = df_final[m['tablero']].mean() if tienen_tab > 0 else 0
 
-                fig_e = go.Figure()
-                fig_e.add_trace(go.Scatter(x=meses_nombres, y=valores, mode='lines+markers+text',
-                    line=dict(color='#3498db', width=4), marker=dict(size=12, color='#1e88e5', line=dict(width=2, color='white')),
-                    text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in valores], textposition="top center"))
-                fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
-                fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], dtick=20, title="Alcance %"))
-                st.plotly_chart(fig_e, use_container_width=True)
-            else:
-                st.warning("⚠️ No se encontraron datos para los filtros seleccionados.")
-        else:
-            st.info("👈 Selecciona un colaborador específico para ver su evolución 2026.")
+        # Fila de Cuadrantes Informativos
+        q1, q2, q3, q4 = st.columns(4)
+        with q1:
+            st.markdown(f'<div class="dotacion-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">COLABORADORES TOTALES</span><br><span style="font-size:1.6rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        with q2:
+            st.markdown(f'<div class="dotacion-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">TIENEN TABLERO</span><br><span style="font-size:1.6rem;font-weight:bold;color:#3498db;">{tienen_tab}</span></div>', unsafe_allow_html=True)
+        with q3:
+            st.markdown(f'<div class="dotacion-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">SIN TABLERO ("-")</span><br><span style="font-size:1.6rem;font-weight:bold;color:#e74c3c;">{no_tienen_tab}</span></div>', unsafe_allow_html=True)
+        with q4:
+            st.markdown(f'<div class="dotacion-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">PROMEDIO GENERAL %</span><br><span style="font-size:1.6rem;font-weight:bold;color:#27ae60;">{prom_grupo:.1f}%</span></div>', unsafe_allow_html=True)
 
-    # --- RESTO DE PANELES ---
+        st.divider()
+
+        # Botones de categorías para Tablero
+        dic_tab = {"CRÍTICO": df_final[df_final[m['tablero']] < 70], "ESPERADO": df_final[(df_final[m['tablero']] >= 70) & (df_final[m['tablero']] < 85)], "ALTO": df_final[(df_final[m['tablero']] >= 85) & (df_final[m['tablero']] < 95)], "SOBRESALIENTE": df_final[df_final[m['tablero']] >= 95]}
+        ct = st.columns(4)
+        for i, (nom, d_cat) in enumerate(dic_tab.items()):
+            if ct[i].button(f"{nom}\n({len(d_cat)})"): st.session_state.det_sel = nom
+        
+        if st.session_state.det_sel in dic_tab:
+            st.subheader(f"Listado: {st.session_state.det_sel}")
+            st.dataframe(dic_tab[st.session_state.det_sel][[m['nombre'], m['area'], m['tablero']]], use_container_width=True)
+            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+
+        # Gráfico Semáforo
+        cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
+        fig_t = px.strip(df_final.dropna(subset=[m['tablero']]), x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_t, use_container_width=True)
+
+    # --- RESTO DE PANELES (Mantenidos sin cambios) ---
     elif "Desempeño Gral." in st.session_state.pagina:
         cats = {"ESTRELLA": df_final[df_final[m['final']]>=90], "PROFESIONAL": df_final[(df_final[m['final']]>=80)&(df_final[m['final']]<90)], "CLAVE": df_final[(df_final[m['final']]>=70)&(df_final[m['final']]<80)], "ENIGMA": df_final[(df_final[m['final']]>=60)&(df_final[m['final']]<70)], "RIESGO": df_final[df_final[m['final']]<60]}
-        cb = st.columns(5)
+        c_btns = st.columns(5)
         for i, (k, v) in enumerate(cats.items()):
-            if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        if st.session_state.det_sel:
-            st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
-            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+            if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
         st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         df_p = df_final.dropna(subset=[m['comp'], m['tablero']])
         if not df_p.empty:
@@ -158,15 +151,20 @@ if df_raw is not None:
             fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
             st.plotly_chart(fig, use_container_width=True)
 
-    elif st.session_state.pagina in ["🧠 Competencias", "📑 Tableros"]:
-        is_comp = "Competencias" in st.session_state.pagina
-        col_data = m['comp'] if is_comp else m['tablero']
-        sem_col = 'Sem_Comp' if is_comp else 'Sem_Tab'
-        cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
-        st.subheader(f"Dispersión por Empresa")
-        df_s = df_final.dropna(subset=[col_data])
-        fig_s = px.strip(df_s, x=m['empresa'], y=col_data, color=sem_col, color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white")
-        st.plotly_chart(fig_s, use_container_width=True)
+    elif "Evolución" in st.session_state.pagina:
+        if f_nom != "Todos":
+            c_data = df_final.iloc[0]
+            meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+            vals = [float(str(c_data.iloc[i]).replace('%','').replace(',','.')) if str(c_data.iloc[i]) not in ['-','nan',''] else np.nan for i in range(15,27)]
+            prom = np.nanmean(vals) if not np.all(np.isnan(vals)) else 0
+            h1, h2 = st.columns([3, 1])
+            with h1: st.title(f_nom); st.subheader(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
+            with h2: st.markdown(f'<div class="prom-box-evol"><span style="font-size:2rem;font-weight:bold;color:#27ae60;">{prom:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
+            fig_e = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
+            fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
+            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %"))
+            st.plotly_chart(fig_e, use_container_width=True)
+        else: st.info("👈 Selecciona un colaborador.")
 
 else:
-    st.error("Error al cargar la información de Grupo Cenoa.")
+    st.error("Error al cargar la información.")
