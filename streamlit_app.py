@@ -6,7 +6,7 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V37.7 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V37.8 | Grupo Cenoa", layout="wide")
 
 # Estados de navegación
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
@@ -38,37 +38,29 @@ def load_all_data():
         csv_url = f"{URL.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
         df = pd.read_csv(csv_url)
         df.columns = df.columns.str.strip()
-        
-        # Mapeo Principal
         m = {
-            'nombre': df.columns[1], # Col B
-            'empresa': df.columns[2],
-            'localidad': df.columns[3],
-            'area': df.columns[4],
-            'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', # Col M
-            'tablero': '% ACUMULADO TABLERO', # Col O
-            'final': 'DESEMPEÑO'
+            'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
+            'area': df.columns[4], 'puesto': df.columns[5],
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'
         }
-        
-        # Limpieza de Nombres y Números
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
-        # Semáforos para dimensiones individuales
         def get_sem(v):
             if pd.isna(v): return "Sin Dato"
             return "Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"
         df['Sem_Comp'] = df[m['comp']].apply(get_sem)
         df['Sem_Tab'] = df[m['tablero']].apply(get_sem)
         
-        # Iniciales para el mapa
-        df['Inic'] = df[m['nombre']].apply(lambda x: (x.split()[0][0] + (x.split()[1][0] if len(x.split())>1 else "")).upper() if len(x)>5 else "")
-        
+        def calc_init(name):
+            parts = name.split()
+            if len(parts) >= 2: return (parts[0][0] + parts[1][0]).upper()
+            return parts[0][0].upper() if parts else ""
+        df['Inic'] = df[m['nombre']].apply(calc_init)
         return df, m
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error crítico: {e}")
         return None, None
 
 df_raw, m = load_all_data()
@@ -76,7 +68,7 @@ df_raw, m = load_all_data()
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard V37.7")
+    st.caption("Dashboard V37.8")
     st.markdown('<p class="sidebar-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
     menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
     st.session_state.pagina = st.radio("Menu", menu, label_visibility="collapsed")
@@ -85,15 +77,14 @@ with st.sidebar:
 if df_raw is not None:
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # Filtros Superiores
+    # Filtros
     cols_f = st.columns([1, 1.2, 1.2, 1.2, 2.5, 0.8])
-    with cols_f[0]: f_anio = st.selectbox("AÑO", ["2025", "2026"]) # El año puede filtrar si tuvieras una columna de año
+    with cols_f[0]: f_anio = st.selectbox("AÑO", ["2025", "2026"])
     with cols_f[1]: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with cols_f[2]: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
     with cols_f[3]: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
     with cols_f[4]: f_nom = st.selectbox("COLABORADOR", ["Todos"] + sorted(df_raw[m['nombre']].unique().tolist()))
 
-    # Aplicar Filtros
     df = df_raw.copy()
     if f_emp != "Todas": df = df[df[m['empresa']] == f_emp]
     if f_loc != "Todas": df = df[df[m['localidad']] == f_loc]
@@ -104,32 +95,30 @@ if df_raw is not None:
         st.markdown(f'<div class="dotacion-card"><span style="font-size:0.6rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;">{len(df)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- PÁGINA: EVOLUCIÓN (DESDE SOLAPA DESEMPEÑO) ---
+    # --- PÁGINA: EVOLUCIÓN ---
     if "Evolución" in st.session_state.pagina:
         if f_nom != "Todos":
-            # Extraer fila del colaborador
             c_data = df[df[m['nombre']] == f_nom].iloc[0]
-            
             h1, h2 = st.columns([3, 1])
             with h1:
                 st.title(f_nom)
                 st.subheader(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
             
-            # Extraer meses (Columnas P a AA -> Índices 15 a 26)
+            # Limpieza segura para NumPy
             meses_nombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
             valores = []
-            for i in range(15, 27): # Índices de las columnas P a AA
+            for i in range(15, 27): # Columnas P a AA
                 try:
                     val_raw = str(c_data.iloc[i]).replace('%', '').replace(',', '.').strip()
-                    if val_raw in ['-', 'nan', '', 'None']:
-                        valores.append(None)
+                    if val_raw in ['-', 'nan', '', 'None', 'NULL']:
+                        valores.append(np.nan) # USAR np.nan es la clave para evitar el TypeError
                     else:
                         valores.append(float(val_raw))
                 except:
-                    valores.append(None)
+                    valores.append(np.nan)
             
-            # Calcular promedio ignorando nulos
-            prom_real = np.nanmean(valores) if any(v is not None for v in valores) else 0
+            # Cálculo de promedio ignorando NaNs
+            prom_real = np.nanmean(valores) if not np.all(np.isnan(valores)) else 0
             
             with h2:
                 st.markdown(f"""
@@ -139,41 +128,25 @@ if df_raw is not None:
                     </div>
                 """, unsafe_allow_html=True)
 
-            # Gráfico de Evolución
             fig_e = go.Figure()
-            fig_e.add_trace(go.Scatter(
-                x=meses_nombres, y=valores,
-                mode='lines+markers+text',
-                line=dict(color='#3498db', width=4),
-                marker=dict(size=12, color='#1e88e5', line=dict(width=2, color='white')),
-                text=[f"{v:.0f}%" if v is not None else "" for v in valores],
-                textposition="top center"
-            ))
-            
+            fig_e.add_trace(go.Scatter(x=meses_nombres, y=valores, mode='lines+markers+text',
+                line=dict(color='#3498db', width=4), marker=dict(size=12, color='#1e88e5', line=dict(width=2, color='white')),
+                text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in valores], textposition="top center"))
             fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
-            
-            fig_e.update_layout(
-                height=500, template="plotly_white",
-                yaxis=dict(range=[0, 165], dtick=20, title="Alcance Tablero %"),
-                margin=dict(l=20, r=20, t=20, b=20)
-            )
+            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], dtick=20, title="Alcance %"))
             st.plotly_chart(fig_e, use_container_width=True)
         else:
-            st.info("👈 Selecciona un colaborador en el filtro superior para ver su evolución mensual.")
+            st.info("👈 Selecciona un colaborador para ver su evolución mensual.")
 
-    # --- PÁGINA: DESEMPEÑO GRAL ---
+    # --- RESTO DE PANELES ---
     elif "Desempeño Gral." in st.session_state.pagina:
-        # Lógica de categorías y gráfico de burbujas con iniciales (reutilizando m['final'])
         cats = {"ESTRELLA": df[df[m['final']]>=90], "PROFESIONAL": df[(df[m['final']]>=80)&(df[m['final']]<90)], "CLAVE": df[(df[m['final']]>=70)&(df[m['final']]<80)], "ENIGMA": df[(df[m['final']]>=60)&(df[m['final']]<70)], "RIESGO": df[df[m['final']]<60]}
-        c_btns = st.columns(5)
+        cb = st.columns(5)
         for i, (k, v) in enumerate(cats.items()):
-            if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        
+            if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
         if st.session_state.det_sel:
-            st.write(f"### Detalle: {st.session_state.det_sel}")
             st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
             if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
-
         st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         df_p = df.dropna(subset=[m['comp'], m['tablero']])
         if not df_p.empty:
@@ -181,18 +154,12 @@ if df_raw is not None:
             fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- DIMENSIONES COMPETENCIAS / TABLEROS ---
     elif st.session_state.pagina in ["🧠 Competencias", "📑 Tableros"]:
         is_comp = "Competencias" in st.session_state.pagina
         col_data = m['comp'] if is_comp else m['tablero']
         sem_col = 'Sem_Comp' if is_comp else 'Sem_Tab'
         cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
-        
-        st.subheader(f"Dispersión de {'Competencias' if is_comp else 'Resultados'} por Empresa")
+        st.subheader(f"Dispersión por Empresa")
         df_s = df.dropna(subset=[col_data])
         fig_s = px.strip(df_s, x=m['empresa'], y=col_data, color=sem_col, color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white")
-        fig_s.update_traces(marker=dict(size=10, opacity=0.7))
         st.plotly_chart(fig_s, use_container_width=True)
-
-else:
-    st.error("Error al cargar los datos.")
