@@ -6,36 +6,68 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard Grupo Cenoa V41.0", layout="wide")
+st.set_page_config(page_title="Dashboard Grupo Cenoa V41.1", layout="wide")
 
-# Inicialización de estados de navegación
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS AVANZADO (Sidebar Bloques + Look & Feel) ---
+# --- 2. CSS AVANZADO (Inyección de Encabezados en el Menú) ---
 st.markdown("""
     <style>
-    /* Estilo del Sidebar Oscuro */
+    /* Sidebar fondo y ancho */
     [data-testid="stSidebar"] { background-color: #263238 !important; min-width: 300px !important; }
-    .sidebar-title { color: #90a4ae !important; font-size: 0.85rem !important; font-weight: bold !important; margin: 25px 0 5px 20px !important; text-transform: uppercase; letter-spacing: 1px; }
     
-    /* Estilo de los "botones" del menú lateral */
+    /* Ocultar círculos de radio */
     [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label { padding: 10px 20px !important; background-color: transparent !important; border-radius: 8px !important; margin-bottom: 4px !important; transition: 0.2s; }
-    [data-testid="stRadio"] label p { color: #eceff1 !important; font-size: 1rem !important; font-weight: 500 !important; }
     
-    /* Resaltado Azul (Activo) */
-    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    /* Estilo base de los botones del menú */
+    [data-testid="stRadio"] div[role="radiogroup"] label {
+        padding: 10px 20px !important;
+        background-color: transparent !important;
+        border-radius: 8px !important;
+        margin-bottom: 4px !important;
+    }
+    [data-testid="stRadio"] label p { color: #eceff1 !important; font-size: 1rem !important; }
+    
+    /* Botón seleccionado (Azul) */
+    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] {
+        background-color: #3498db !important;
+    }
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
 
-    /* Componentes */
+    /* --- INYECCIÓN DE TÍTULOS DE BLOQUE --- */
+    /* Título 1: GESTIÓN RRHH (Antes del primer ítem) */
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before {
+        content: "GESTIÓN RRHH";
+        display: block;
+        color: #90a4ae;
+        font-size: 0.8rem;
+        font-weight: bold;
+        padding: 20px 0 10px 0;
+        letter-spacing: 1px;
+    }
+
+    /* Título 2: GESTIÓN COMERCIAL (Antes del quinto ítem: Ranking) */
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5)::before {
+        content: "GESTIÓN COMERCIAL";
+        display: block;
+        color: #90a4ae;
+        font-size: 0.8rem;
+        font-weight: bold;
+        padding: 25px 0 10px 0;
+        letter-spacing: 1px;
+        border-top: 1px solid #37474f;
+        margin-top: 10px;
+    }
+
+    /* Estilos Generales */
     .kpi-card { background-color: #ffffff; border-radius: 15px; padding: 15px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 70px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CARGA DE DATOS (Blindada) ---
+# --- 3. CARGA DE DATOS ---
 @st.cache_data(ttl=60)
 def load_all_data():
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
@@ -47,13 +79,14 @@ def load_all_data():
         m = {
             'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
             'area': df.columns[4], 'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 
+            'tablero': '% ACUMULADO TABLERO', 
+            'final': 'DESEMPEÑO'
         }
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
-        # Semáforos e Iniciales
         def get_sem(v):
             if pd.isna(v): return "Sin Dato"
             return "Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"
@@ -65,25 +98,25 @@ def load_all_data():
 
 df_raw, m = load_all_data()
 
-# --- 4. SIDEBAR (MENÚ POR BLOQUES SINCRONIZADO) ---
+# --- 4. SIDEBAR (UNIFICADO Y BLINDADO) ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard 2026 | V41.0")
+    st.caption("Dashboard 2026 | V41.1")
     
-    # BLOQUE 1: GESTIÓN RRHH
-    st.markdown('<p class="sidebar-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
-    menu_rrhh = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución"]
+    # Lista única de opciones para evitar errores de navegación
+    menu_completo = [
+        "👤 Desempeño Gral.", 
+        "🧠 Competencias", 
+        "📑 Tableros", 
+        "📈 Evolución",
+        "🥇 Ranking Comercial", 
+        "📊 Perf. Comercial", 
+        "🔳 Matriz 9-Box"
+    ]
     
-    # BLOQUE 2: GESTIÓN COMERCIAL
-    st.markdown('<p class="sidebar-title">GESTIÓN COMERCIAL</p>', unsafe_allow_html=True)
-    menu_com = ["🥇 Ranking Comercial", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
-
-    # Lógica para saber en qué bloque estamos
-    full_menu = menu_rrhh + menu_com
-    default_idx = full_menu.index(st.session_state.pagina) if st.session_state.pagina in full_menu else 0
-    
-    # Usamos un solo Radio para evitar conflictos de estado, pero lo separamos visualmente con los títulos anteriores
-    seleccion = st.radio("Navegación", full_menu, index=default_idx, label_visibility="collapsed")
+    # El CSS se encarga de poner los títulos en las posiciones 1 y 5
+    idx_actual = menu_completo.index(st.session_state.pagina) if st.session_state.pagina in menu_completo else 0
+    seleccion = st.radio("MenuPrincipal", menu_completo, index=idx_actual, label_visibility="collapsed")
     
     if st.session_state.pagina != seleccion:
         st.session_state.pagina = seleccion
@@ -94,7 +127,7 @@ with st.sidebar:
 if df_raw is not None:
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # FILTROS GLOBALES
+    # FILTROS
     cols_f = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     with cols_f[0]: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with cols_f[1]: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
@@ -117,13 +150,13 @@ if df_raw is not None:
     # --- LÓGICA DE PÁGINAS ---
     
     if "Desempeño Gral." in st.session_state.pagina:
-        cats = {"ESTRELLA": df_final[df_final[m['final']]>=90], "PROFESIONAL": df_final[(df_final[m['final']]>=80)&(df_final[m['final']]<90)], "CLAVE": df_final[(df_final[m['final']]>=70)&(df_final[m['final']]<80)], "ENIGMA": df_final[(df_final[m['final']]>=60)&(df_final[m['final']]<70)], "RIESGO": df_final[df_final[m['final']]<60]}
+        cats = {"ESTRELLA": df_final[df_final[m['final']] >= 90], "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)], "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)], "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)], "RIESGO": df_final[df_final[m['final']] < 60]}
         cb = st.columns(5)
         for i, (k, v) in enumerate(cats.items()):
             if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
         if st.session_state.det_sel in cats:
             st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
-            if st.button("Cerrar"): st.session_state.det_sel = None; st.rerun()
+            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
         st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio General: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         fig_p = px.scatter(df_final.dropna(subset=[m['comp'], m['tablero']]), x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
         fig_p.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
@@ -162,20 +195,15 @@ if df_raw is not None:
             st.plotly_chart(fig_e, use_container_width=True)
         else: st.info("👈 Seleccione un colaborador para ver resultados.")
 
-    # --- NUEVA SECCIÓN: RANKING COMERCIAL ---
     elif "Ranking Comercial" in st.session_state.pagina:
-        st.subheader("Top 10 Colaboradores - Desempeño 2026")
+        st.subheader("Top 10 Colaboradores por Desempeño Comercial")
         df_rank = df_f[df_f[m['tablero']].notna()].sort_values(by=m['tablero'], ascending=False).head(10)
         if not df_rank.empty:
-            fig_r = px.bar(df_rank, x=m['tablero'], y=m['nombre'], orientation='h', color=m['tablero'], color_continuous_scale='RdYlGn', text_auto='.1f')
-            fig_r.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_white")
-            st.plotly_chart(fig_r, use_container_width=True)
-            st.write("### Listado Completo Ordenado")
+            fig_rank = px.bar(df_rank, x=m['tablero'], y=m['nombre'], orientation='h', color=m['tablero'], color_continuous_scale='RdYlGn', text_auto='.1f')
+            fig_rank.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_white")
+            st.plotly_chart(fig_rank, use_container_width=True)
             st.dataframe(df_f[[m['nombre'], m['empresa'], m['puesto'], m['tablero']]].sort_values(by=m['tablero'], ascending=False), use_container_width=True)
         else: st.warning("No hay datos cargados para generar el ranking.")
-
-    elif "Perf. Comercial" in st.session_state.pagina or "Matriz 9-Box" in st.session_state.pagina:
-        st.info("Dimensión en desarrollo para el bloque de Gestión Comercial.")
 
 else:
     st.error("Error al conectar con la base de datos de Grupo Cenoa.")
