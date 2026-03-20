@@ -1,38 +1,36 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import urllib.parse
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V36.4 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V36.5 | Grupo Cenoa", layout="wide")
 
 # Inicialización de estados
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_gen' not in st.session_state: st.session_state.det_gen = None
 if 'det_comp' not in st.session_state: st.session_state.det_comp = None
 
-# --- 2. CSS AVANZADO (Look V36.3 + Componentes Interactivos) ---
+# --- 2. CSS AVANZADO (Sidebar con Texto + Botones + Analista) ---
 st.markdown("""
     <style>
-    /* 2.1 Sidebar Look & Feel */
+    /* Sidebar Look & Feel */
     [data-testid="stSidebar"] { background-color: #263238 !important; }
-    .sidebar-section-title { color: #90a4ae !important; font-size: 0.8rem !important; font-weight: bold !important; margin: 20px 0 10px 20px !important; text-transform: uppercase; }
+    .sidebar-title { color: #90a4ae !important; font-size: 0.8rem !important; font-weight: bold !important; margin: 20px 0 5px 20px !important; text-transform: uppercase; }
+    
+    /* Mostrar texto en el radio y ocultar círculos */
     [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
     [data-testid="stRadio"] div[role="radiogroup"] label { padding: 10px 20px !important; background-color: transparent !important; border-radius: 8px !important; margin-bottom: 5px !important; width: 100% !important; }
     [data-testid="stRadio"] label p { color: #eceff1 !important; font-size: 1.05rem !important; font-weight: 500 !important; margin: 0 !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; color: white !important; }
+    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; }
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
 
-    /* 2.2 Componentes del Panel */
-    .dotacion-card { background-color: #f0f2f6; border-radius: 10px; padding: 10px; text-align: center; border: 1px solid #dfe3e8; height: 100%; }
+    /* Componentes */
+    .dotacion-card { background-color: #f0f2f6; border-radius: 10px; padding: 10px; text-align: center; border: 1px solid #dfe3e8; }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; }
     
-    /* Botones Categorías (Interactivas) */
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; transition: 0.3s; }
-    div.stButton > button:hover { border-color: #6f42c1; background-color: #f8f9fa; }
-    
-    /* Colores Competencias */
+    /* Bordes de Competencias */
     .btn-critico { border-left: 8px solid #c0392b !important; }
     .btn-esperado { border-left: 8px solid #f1c40f !important; }
     .btn-alto { border-left: 8px solid #27ae60 !important; }
@@ -42,7 +40,7 @@ st.markdown("""
 
 # --- 3. CARGA DE DATOS ---
 @st.cache_data(ttl=60)
-def load_data_cenoa_v36_4():
+def load_data_v36_5():
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
         sheet_name = urllib.parse.quote("DESEMPEÑO")
@@ -59,38 +57,32 @@ def load_data_cenoa_v36_4():
         
         # Limpieza Numérica
         for k in ['comp', 'tablero', 'final']:
-            if m[k] in df.columns:
-                df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
+            df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
-        # --- GENERAR INICIALES ---
-        def get_initials(name):
-            try:
-                words = name.split()
-                if len(words) >= 2: return (words[0][0] + words[1][0]).upper()
-                return words[0][0].upper() if words else ""
-            except: return ""
-        df['Iniciales'] = df[m['nombre']].apply(get_initials)
+        # Función para iniciales (Ej: Juan Perez -> JP)
+        def calc_init(name):
+            parts = name.split()
+            return (parts[0][0] + (parts[1][0] if len(parts)>1 else "")).upper()
+        df['Inic'] = df[m['nombre']].apply(calc_init)
         
         return df, m
     except: return None, None
 
-df_raw, m = load_data_cenoa_v36_4()
+df_raw, m = load_data_v36_5()
 
-# --- 4. SIDEBAR RESTAURADO ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard V36.4")
-    
-    st.markdown('<p class="sidebar-section-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
-    opciones_menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
-    seleccion = st.radio("Menu", opciones_menu, label_visibility="collapsed")
-    st.session_state.pagina = seleccion
+    st.caption("Dashboard V36.5")
+    st.markdown('<p class="sidebar-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
+    menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
+    st.session_state.pagina = st.radio("Menu", menu, label_visibility="collapsed")
 
 # --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # FILTROS
+    # Filtros
     c1, c2, c3, c4, c_dot = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     with c1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with c2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
@@ -107,56 +99,75 @@ if df_raw is not None:
         st.markdown(f'<div class="dotacion-card"><span style="font-size:0.7rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.5rem;font-weight:bold;">{len(df)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- LÓGICA DE PÁGINAS ---
-
-    # DIMENSIÓN: DESEMPEÑO GENERAL (Botones e Gráfico Mapeo Talentos)
+    # --- PÁGINA: DESEMPEÑO GRAL ---
     if "Desempeño Gral." in st.session_state.pagina:
-        # Lógica Categorías Universal (Mamani con 84.7% es Profesional)
+        # Categorías
         dic_gen = {
-            "ESTRELLA (>=90)": df[df[m['final']] >= 90],
-            "PROFESIONAL (80-89)": df[(df[m['final']] >= 80) & (df[m['final']] < 90)],
-            "CLAVE (70-79)": df[(df[m['final']] >= 70) & (df[m['final']] < 80)],
-            "ENIGMA (60-69)": df[(df[m['final']] >= 60) & (df[m['final']] < 70)],
-            "RIESGO (<60)": df[df[m['final']] < 60]
+            "ESTRELLA": df[df[m['final']] >= 90],
+            "PROFESIONAL": df[(df[m['final']] >= 80) & (df[m['final']] < 90)],
+            "CLAVE": df[(df[m['final']] >= 70) & (df[m['final']] < 80)],
+            "ENIGMA": df[(df[m['final']] >= 60) & (df[m['final']] < 70)],
+            "RIESGO": df[df[m['final']] < 60]
         }
-        iconos_gen = ["⭐", "📘", "✅", "❓", "⚠️"]
-
-        # Botones Interactivos
+        
+        # Botones
         cb = st.columns(5)
+        iconos = ["⭐", "📘", "✅", "❓", "⚠️"]
         for i, (nom, d_cat) in enumerate(dic_gen.items()):
-            nom_btn = nom.split(" ")[0] # Toma el nombre sin el rango
             with cb[i]:
-                if st.button(f"{iconos_gen[i]} {nom_btn}\n({len(d_cat)})"): st.session_state.det_gen = nom
+                if st.button(f"{iconos[i]} {nom}\n({len(d_cat)})"): st.session_state.det_gen = nom
 
-        # Apertura de Detalle
         if st.session_state.det_gen:
             st.subheader(f"Listado: {st.session_state.det_gen}")
             df_d = dic_gen[st.session_state.det_gen]
             if not df_d.empty:
                 df_d['Valor'] = df_d.apply(lambda r: f"R:{r[m['tablero']]:.0f}% / P:{r[m['comp']]:.0f}%", axis=1)
-                st.dataframe(df_d[[m['nombre'], m['puesto'], m['area'], 'Valor']].sort_values(by=m['nombre']), use_container_width=True)
-                if st.button("✖️ Cerrar Detalle"): st.session_state.det_gen = None; st.rerun()
-            else: st.info("No hay colaboradores."); if st.button("Cerrar"): st.session_state.det_gen = None; st.rerun()
-            st.divider()
+                st.dataframe(df_d[[m['nombre'], m['puesto'], m['area'], 'Valor']], use_container_width=True)
+                if st.button("Cerrar Listado"): st.session_state.det_gen = None; st.rerun()
+            else:
+                st.info("Sin datos.")
+                if st.button("Cerrar"): st.session_state.det_gen = None; st.rerun()
 
         st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         
-        st.subheader("Mapeo Talentos (Burbujas Estéticas con Iniciales)")
-        # Preparación de datos para gráfico
-        df_gen_plot = df.dropna(subset=[m['comp'], m['tablero']])
-        
-        if not df_gen_plot.empty:
-            # Gráfico Burbujas Estéticas (Mode markers+text)
-            fig_gen = px.scatter(
-                df_gen_plot, x=m['tablero'], y=m['comp'], 
-                color=m['area'], hover_name=m['nombre'], 
-                text='Iniciales',
-                labels={m['tablero']: "Resultados (Tablero %)", m['comp']: "Potencial (Competencias %)"},
-                height=600, template="plotly_white",
-                color_discrete_sequence=px.colors.qualitative.Prism
+        # GRÁFICO ESTÉTICO CON INICIALES
+        st.subheader("Mapa de Distribución de Talentos")
+        df_p = df.dropna(subset=[m['comp'], m['tablero']])
+        if not df_p.empty:
+            fig = px.scatter(df_p, x=m['tablero'], y=m['comp'], color=m['area'],
+                             text='Inic', hover_name=m['nombre'],
+                             height=650, template="plotly_white")
+            
+            # Hacer esferas más grandes y centrar texto
+            fig.update_traces(
+                textposition='middle center',
+                textfont=dict(size=10, color='white', family="Arial Black"),
+                marker=dict(size=35, line=dict(width=1, color='white'), opacity=0.8)
             )
-            # Personalización de Burbujas (Más grandes y estéticas)
-            fig_gen.update_traces(
-                mode='markers+text',
-                marker=dict(size=df_gen_plot[m['final']].fillna(50), 
-                            sizemode='area', sizeref=2
+            fig.add_hline(y=75, line_dash="dash", line_color="#eceff1")
+            fig.add_vline(x=75, line_dash="dash", line_color="#eceff1")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # --- PÁGINA: COMPETENCIAS ---
+    elif "Competencias" in st.session_state.pagina:
+        dic_comp = {
+            "CRÍTICO": df[df[m['comp']] < 70],
+            "ESPERADO": df[(df[m['comp']] >= 70) & (df[m['comp']] < 85)],
+            "ALTO": df[(df[m['comp']] >= 85) & (df[m['comp']] < 95)],
+            "SOBRESALIENTE": df[df[m['comp']] >= 95]
+        }
+        cc = st.columns(4)
+        for i, (nom, d_cat) in enumerate(dic_comp.items()):
+            with cc[i]:
+                if st.button(f"{nom}\n{len(d_cat)}"): st.session_state.det_comp = nom
+
+        if st.session_state.det_comp:
+            st.dataframe(dic_comp[st.session_state.det_comp][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
+            if st.button("Cerrar Detalle Comp."): st.session_state.det_comp = None; st.rerun()
+
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio Competencias: <b>{df[m["comp"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        fig_s = px.strip(df.dropna(subset=[m['comp']]), x=m['area'], y=m['comp'], color=m['area'], hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_s, use_container_width=True)
+
+else:
+    st.error("Error de conexión.")
