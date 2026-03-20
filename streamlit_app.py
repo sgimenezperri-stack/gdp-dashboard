@@ -4,7 +4,7 @@ import plotly.express as px
 import urllib.parse
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Gestión de Talento V35.1", layout="wide")
+st.set_page_config(page_title="Gestión de Talento V35.2", layout="wide")
 
 if 'detalle_categoria' not in st.session_state:
     st.session_state.detalle_categoria = None
@@ -32,7 +32,7 @@ st.markdown("""
 
 # --- CARGA DE DATOS ---
 @st.cache_data(ttl=60)
-def load_data_v35_1():
+def load_data_v35_2():
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
         sheet_name = urllib.parse.quote("DESEMPEÑO")
@@ -40,8 +40,10 @@ def load_data_v35_1():
         df = pd.read_csv(csv_url)
         df.columns = df.columns.str.strip()
         
+        # --- MAPEO CORREGIDO ---
         m = {
-            'nombre': df.columns[0],
+            'nombre': df.columns[1],      # <--- CAMBIADO A COLUMNA 2 (Índice 1) para Apellido y Nombre
+            'cuil': df.columns[0],        # Guardamos el CUIL por si lo necesitas luego
             'empresa': df.columns[2],
             'localidad': df.columns[3],
             'area': df.columns[4],
@@ -51,17 +53,20 @@ def load_data_v35_1():
             'final': 'DESEMPEÑO'
         }
 
-        # LIMPIEZA CRÍTICA: Asegurar que los nombres sean TEXTO para evitar el error anterior
-        df[m['nombre']] = df[m['nombre']].astype(str).str.strip()
+        # LIMPIEZA DE NOMBRES
+        df[m['nombre']] = df[m['nombre']].astype(str).str.strip().str.upper()
 
         # Limpieza Numérica
         for k in ['comp', 'tablero', 'final']:
-            df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
+            if m[k] in df.columns:
+                df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
         return df, m
-    except: return None, None
+    except Exception as e:
+        st.error(f"Error: {e}")
+        return None, None
 
-df_raw, m = load_data_v35_1()
+df_raw, m = load_data_v35_2()
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -76,19 +81,19 @@ with st.sidebar:
 if df_raw is not None:
     st.header("Desempeño General")
 
-    # 1. FILTROS SUPERIORES CON AUTOCOMPLETADO
+    # 1. FILTROS SUPERIORES
     c1, c2, c3, c4, c_dot = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     
     with c1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with c2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
     with c3: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
     
-    # NUEVO FILTRO: Selectbox con búsqueda para Colaborador
+    # BUSCADOR POR NOMBRE (Columna 2)
     with c4: 
         lista_nombres = ["Todos"] + sorted(df_raw[m['nombre']].unique().tolist())
-        f_nom = st.selectbox("COLABORADOR (Escribe para buscar)", options=lista_nombres)
+        f_nom = st.selectbox("COLABORADOR (Escribe Apellido)", options=lista_nombres)
     
-    # Lógica de Filtrado
+    # Filtrado
     df = df_raw.copy()
     if f_emp != "Todas": df = df[df[m['empresa']] == f_emp]
     if f_loc != "Todas": df = df[df[m['localidad']] == f_loc]
@@ -107,7 +112,6 @@ if df_raw is not None:
     st.divider()
 
     # 2. BOTONES DE CATEGORÍA
-    # (Lógica de agrupación de categorías...)
     estrellas = df[ (df[m['tablero']] >= 85) & (df[m['comp']] >= 85) ]
     claves = df[ (df[m['final']] >= 70) & (df[m['final']] < 85) ]
     riesgos = df[ (df[m['final']] < 60) ]
@@ -137,7 +141,7 @@ if df_raw is not None:
         if not df_det.empty:
             df_display = df_det[[m['nombre'], m['puesto'], m['empresa'], m['area']]].copy()
             df_display['Valor'] = df_det.apply(lambda r: f"R:{r[m['tablero']]:.0f}% / P:{r[m['comp']]:.0f}%", axis=1)
-            st.dataframe(df_display, use_container_width=True) # Dataframe para scroll si hay muchos
+            st.dataframe(df_display, use_container_width=True)
             if st.button("Cerrar Detalle"):
                 st.session_state.detalle_categoria = None
                 st.rerun()
@@ -147,18 +151,20 @@ if df_raw is not None:
     st.markdown(f"""
         <div class="analista-box">
             <strong>📝 Analista Virtual</strong><br>
-            Promedio General: <b>{df[m['final']].mean():.1f}%</b>.
+            Promedio General del grupo seleccionado: <b>{df[m['final']].mean():.1f}%</b>.
         </div>
     """, unsafe_allow_html=True)
 
     st.subheader("Mapa de Distribución")
-    fig = px.scatter(df.dropna(subset=[m['comp'], m['tablero']]), 
-                     x=m['tablero'], y=m['comp'], color=m['area'],
-                     hover_name=m['nombre'], size=df.dropna(subset=[m['comp'], m['tablero']])[m['final']].fillna(50),
-                     height=500, template="plotly_white")
-    fig.add_hline(y=75, line_dash="dash", line_color="#eceff1")
-    fig.add_vline(x=75, line_dash="dash", line_color="#eceff1")
-    st.plotly_chart(fig, use_container_width=True)
+    df_plot = df.dropna(subset=[m['comp'], m['tablero']])
+    if not df_plot.empty:
+        fig = px.scatter(df_plot, 
+                         x=m['tablero'], y=m['comp'], color=m['area'],
+                         hover_name=m['nombre'], size=df_plot[m['final']].fillna(50),
+                         height=500, template="plotly_white")
+        fig.add_hline(y=75, line_dash="dash", line_color="#eceff1")
+        fig.add_vline(x=75, line_dash="dash", line_color="#eceff1")
+        st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.error("Conexión fallida con Google Sheets.")
+    st.error("Error al leer los datos de Grupo Cenoa.")
