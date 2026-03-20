@@ -6,13 +6,13 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V39.0 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard Grupo Cenoa V40.0", layout="wide")
 
-# Estados de navegación y detalles
+# Inicialización de estados de navegación y detalles
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS AVANZADO ---
+# --- 2. CSS AVANZADO (Sidebar + KPIs + Botones) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #263238 !important; }
@@ -76,7 +76,7 @@ with st.sidebar:
     seleccion = st.radio("Menu", menu, label_visibility="collapsed")
     if st.session_state.pagina != seleccion:
         st.session_state.pagina = seleccion
-        st.session_state.det_sel = None # Limpiar detalles al cambiar de página
+        st.session_state.det_sel = None
 
 # --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
@@ -93,7 +93,8 @@ if df_raw is not None:
     if f_loc != "Todas": df_f = df_f[df_f[m['localidad']] == f_loc]
     if f_are != "Todas": df_f = df_f[df_f[m['area']] == f_are]
 
-    with cols_f[3]: f_nom = st.selectbox("COLABORADOR", ["Todos"] + sorted(df_f[m['nombre']].unique().tolist()))
+    nombres_disponibles = sorted(df_f[m['nombre']].unique().tolist())
+    with cols_f[3]: f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disponibles)
     df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
     
     with cols_f[4]:
@@ -104,23 +105,14 @@ if df_raw is not None:
 
     # --- PÁGINA: DESEMPEÑO GRAL ---
     if "Desempeño Gral." in st.session_state.pagina:
-        cats_g = {
-            "ESTRELLA": df_final[df_final[m['final']] >= 90],
-            "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)],
-            "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)],
-            "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)],
-            "RIESGO": df_final[df_final[m['final']] < 60]
-        }
+        cats_g = {"ESTRELLA": df_final[df_final[m['final']] >= 90], "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)], "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)], "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)], "RIESGO": df_final[df_final[m['final']] < 60]}
         c_btns = st.columns(5)
         for i, (k, v) in enumerate(cats_g.items()):
             if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        
         if st.session_state.det_sel in cats_g:
-            st.write(f"### Lista: {st.session_state.det_sel}")
-            st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+            st.write(f"### Lista: {st.session_state.det_sel}"); st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
             if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
-
-        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio General: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         df_p = df_final.dropna(subset=[m['comp'], m['tablero']])
         if not df_p.empty:
             fig = px.scatter(df_p, x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
@@ -129,71 +121,41 @@ if df_raw is not None:
 
     # --- PÁGINA: COMPETENCIAS ---
     elif "Competencias" in st.session_state.pagina:
-        evals = df_final[m['comp']].notna().sum()
-        no_evals = df_final[m['comp']].isna().sum()
-        prom_c = df_final[m['comp']].mean() if evals > 0 else 0
-
-        # KPIs Cobertura
+        evals = df_final[m['comp']].notna().sum(); no_evals = df_final[m['comp']].isna().sum(); prom_c = df_final[m['comp']].mean() if evals > 0 else 0
         q1, q2, q3, q4 = st.columns(4)
         with q1: st.markdown(f'<div class="kpi-card"><b>DOTACIÓN</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
         with q2: st.markdown(f'<div class="kpi-card"><b>EVALUADOS</b><br><h3 style="color:#3498db;">{evals}</h3></div>', unsafe_allow_html=True)
         with q3: st.markdown(f'<div class="kpi-card"><b>SIN EVALUAR</b><br><h3 style="color:#e74c3c;">{no_evals}</h3></div>', unsafe_allow_html=True)
         with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom_c:.1f}%</h3></div>', unsafe_allow_html=True)
         st.divider()
-
-        # Botones de Categorías
-        cats_c = {
-            "CRÍTICO": df_final[df_final[m['comp']] < 70],
-            "ESPERADO": df_final[(df_final[m['comp']] >= 70) & (df_final[m['comp']] < 85)],
-            "ALTO": df_final[(df_final[m['comp']] >= 85) & (df_final[m['comp']] < 95)],
-            "SOBRESALIENTE": df_final[df_final[m['comp']] >= 95]
-        }
+        cats_c = {"CRÍTICO": df_final[df_final[m['comp']] < 70], "ESPERADO": df_final[(df_final[m['comp']] >= 70) & (df_final[m['comp']] < 85)], "ALTO": df_final[(df_final[m['comp']] >= 85) & (df_final[m['comp']] < 95)], "SOBRESALIENTE": df_final[df_final[m['comp']] >= 95]}
         cc = st.columns(4)
         for i, (k, v) in enumerate(cats_c.items()):
             if cc[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        
         if st.session_state.det_sel in cats_c:
-            st.write(f"### Detalle Competencias: {st.session_state.det_sel}")
-            st.dataframe(cats_c[st.session_state.det_sel][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
-            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
-
-        fig_c = px.strip(df_final.dropna(subset=[m['comp']]), x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white")
-        st.plotly_chart(fig_c, use_container_width=True)
+            st.write(f"### Detalle: {st.session_state.det_sel}"); st.dataframe(cats_c[st.session_state.det_sel][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
+            if st.button("Cerrar"): st.session_state.det_sel = None; st.rerun()
+        st.plotly_chart(px.strip(df_final.dropna(subset=[m['comp']]), x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white"), use_container_width=True)
 
     # --- PÁGINA: TABLEROS ---
     elif "Tableros" in st.session_state.pagina:
-        tienen = df_final[m['tablero']].notna().sum()
-        no_tienen = df_final[m['tablero']].isna().sum()
-        prom_t = df_final[m['tablero']].mean() if tienen > 0 else 0
-
-        # KPIs Cobertura
+        tienen = df_final[m['tablero']].notna().sum(); no_tienen = df_final[m['tablero']].isna().sum(); prom_t = df_final[m['tablero']].mean() if tienen > 0 else 0
         qt1, qt2, qt3, qt4 = st.columns(4)
         with qt1: st.markdown(f'<div class="kpi-card"><b>DOTACIÓN</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
         with qt2: st.markdown(f'<div class="kpi-card"><b>TIENEN TABLERO</b><br><h3 style="color:#3498db;">{tienen}</h3></div>', unsafe_allow_html=True)
         with qt3: st.markdown(f'<div class="kpi-card"><b>SIN TABLERO</b><br><h3 style="color:#e74c3c;">{no_tienen}</h3></div>', unsafe_allow_html=True)
         with qt4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO TABLERO</b><br><h3 style="color:#27ae60;">{prom_t:.1f}%</h3></div>', unsafe_allow_html=True)
         st.divider()
-
-        # Botones de Categorías
-        cats_t = {
-            "CRÍTICO": df_final[df_final[m['tablero']] < 70],
-            "ESPERADO": df_final[(df_final[m['tablero']] >= 70) & (df_final[m['tablero']] < 85)],
-            "ALTO": df_final[(df_final[m['tablero']] >= 85) & (df_final[m['tablero']] < 95)],
-            "SOBRESALIENTE": df_final[df_final[m['tablero']] >= 95]
-        }
+        cats_t = {"CRÍTICO": df_final[df_final[m['tablero']] < 70], "ESPERADO": df_final[(df_final[m['tablero']] >= 70) & (df_final[m['tablero']] < 85)], "ALTO": df_final[(df_final[m['tablero']] >= 85) & (df_final[m['tablero']] < 95)], "SOBRESALIENTE": df_final[df_final[m['tablero']] >= 95]}
         ct = st.columns(4)
         for i, (k, v) in enumerate(cats_t.items()):
             if ct[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        
         if st.session_state.det_sel in cats_t:
-            st.write(f"### Detalle Tableros: {st.session_state.det_sel}")
-            st.dataframe(cats_t[st.session_state.det_sel][[m['nombre'], m['area'], m['tablero']]], use_container_width=True)
-            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+            st.write(f"### Detalle: {st.session_state.det_sel}"); st.dataframe(cats_t[st.session_state.det_sel][[m['nombre'], m['area'], m['tablero']]], use_container_width=True)
+            if st.button("Cerrar"): st.session_state.det_sel = None; st.rerun()
+        st.plotly_chart(px.strip(df_final.dropna(subset=[m['tablero']]), x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white"), use_container_width=True)
 
-        fig_t = px.strip(df_final.dropna(subset=[m['tablero']]), x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white")
-        st.plotly_chart(fig_t, use_container_width=True)
-
-    # --- PÁGINA: EVOLUCIÓN ---
+    # --- PÁGINA: EVOLUCIÓN (UX MEJORADA) ---
     elif "Evolución" in st.session_state.pagina:
         if f_nom != "Todos":
             c_data = df_final.iloc[0]
@@ -205,7 +167,10 @@ if df_raw is not None:
             with h2: st.markdown(f'<div class="kpi-card"><span style="color:#27ae60;font-size:2rem;font-weight:bold;">{prom_e:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
             fig_e = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
             fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
-            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165]))
+            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %"))
             st.plotly_chart(fig_e, use_container_width=True)
+        else:
+            st.info("👈 Seleccione un colaborador en el filtro superior para ver resultados.")
 
-else: st.error("Error de conexión.")
+else:
+    st.error("Error al conectar con la base de datos.")
