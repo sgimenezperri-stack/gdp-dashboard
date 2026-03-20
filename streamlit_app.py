@@ -6,12 +6,12 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V38.1 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V38.5 | Grupo Cenoa", layout="wide")
 
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS AVANZADO ---
+# --- 2. CSS AVANZADO (Sidebar y KPIs) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #263238 !important; }
@@ -23,12 +23,8 @@ st.markdown("""
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
     
     .kpi-card { 
-        background-color: #ffffff; 
-        border-radius: 15px; 
-        padding: 15px; 
-        text-align: center; 
-        border: 1px solid #e0e0e0; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        background-color: #ffffff; border-radius: 15px; padding: 15px; text-align: center; 
+        border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 70px; }
@@ -47,18 +43,20 @@ def load_all_data():
         m = {
             'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
             'area': df.columns[4], 'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 
+            'tablero': '% ACUMULADO TABLERO', 
+            'final': 'DESEMPEÑO'
         }
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
+        # Semáforos e Iniciales
         def get_sem(v):
             if pd.isna(v): return "Sin Dato"
             return "Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"
         df['Sem_Comp'] = df[m['comp']].apply(get_sem)
         df['Sem_Tab'] = df[m['tablero']].apply(get_sem)
-        
         df['Inic'] = df[m['nombre']].apply(lambda x: (x.split()[0][0] + (x.split()[1][0] if len(x.split())>1 else "")).upper() if len(x)>3 else "")
         return df, m
     except: return None, None
@@ -93,66 +91,69 @@ if df_raw is not None:
 
     df_final = df_filtrado if f_nom == "Todos" else df_filtrado[df_filtrado[m['nombre']] == f_nom]
     
-    # Cuadrante Dotación siempre visible arriba a la derecha
     with cols_f[4]:
         st.markdown(f'<div class="kpi-card"><span style="font-size:0.6rem;font-weight:bold;color:#636e72;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;color:#2d3436;">{len(df_final)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- DIMENSIÓN: COMPETENCIAS (CON NUEVOS CUADRANTES) ---
-    if "Competencias" in st.session_state.pagina:
-        evaluados_c = df_final[m['comp']].notna().sum()
-        no_evaluados_c = df_final[m['comp']].isna().sum()
-        prom_comp = df_final[m['comp']].mean() if evaluados_c > 0 else 0
-
-        qc1, qc2, qc3, qc4 = st.columns(4)
-        with qc1: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">TOTAL COLABORADORES</span><br><span style="font-size:1.6rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
-        with qc2: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">EVALUADOS</span><br><span style="font-size:1.6rem;font-weight:bold;color:#3498db;">{evaluados_c}</span></div>', unsafe_allow_html=True)
-        with qc3: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">NO EVALUADOS ("-")</span><br><span style="font-size:1.6rem;font-weight:bold;color:#e74c3c;">{no_evaluados_c}</span></div>', unsafe_allow_html=True)
-        with qc4: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">PROMEDIO COMPETENCIAS %</span><br><span style="font-size:1.6rem;font-weight:bold;color:#6f42c1;">{prom_comp:.1f}%</span></div>', unsafe_allow_html=True)
+    # --- DIMENSIÓN: DESEMPEÑO GRAL (RESTAURADO) ---
+    if "Desempeño Gral." in st.session_state.pagina:
+        # Lógica de Categorías (Blindada contra errores de nombres)
+        cats = {
+            "ESTRELLA": df_final[df_final[m['final']] >= 90],
+            "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)],
+            "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)],
+            "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)],
+            "RIESGO": df_final[df_final[m['final']] < 60]
+        }
         
-        st.divider()
-        
-        # Botones de categorías
-        dic_comp = {"CRÍTICO": df_final[df_final[m['comp']] < 70], "ESPERADO": df_final[(df_final[m['comp']] >= 70) & (df_final[m['comp']] < 85)], "ALTO": df_final[(df_final[m['comp']] >= 85) & (df_final[m['comp']] < 95)], "SOBRESALIENTE": df_final[df_final[m['comp']] >= 95]}
-        cc = st.columns(4)
-        for i, (k, v) in enumerate(dic_comp.items()):
-            if cc[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        
-        if st.session_state.det_sel in dic_comp:
-            st.subheader(f"Listado: {st.session_state.det_sel}")
-            st.dataframe(dic_comp[st.session_state.det_sel][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
-            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
-
-        st.subheader("Dispersión de Competencias por Empresa")
-        cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
-        fig_c = px.strip(df_final.dropna(subset=[m['comp']]), x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white")
-        st.plotly_chart(fig_c, use_container_width=True)
-
-    # --- DIMENSIÓN: TABLEROS (MANTENIENDO KPIs) ---
-    elif "Tableros" in st.session_state.pagina:
-        tienen_tab = df_final[m['tablero']].notna().sum()
-        no_tienen_tab = df_final[m['tablero']].isna().sum()
-        prom_tab = df_final[m['tablero']].mean() if tienen_tab > 0 else 0
-
-        qt1, qt2, qt3, qt4 = st.columns(4)
-        with qt1: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">TOTAL COLABORADORES</span><br><span style="font-size:1.6rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
-        with qt2: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">TIENEN TABLERO</span><br><span style="font-size:1.6rem;font-weight:bold;color:#3498db;">{tienen_tab}</span></div>', unsafe_allow_html=True)
-        with qt3: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">SIN TABLERO ("-")</span><br><span style="font-size:1.6rem;font-weight:bold;color:#e74c3c;">{no_tienen_tab}</span></div>', unsafe_allow_html=True)
-        with qt4: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">PROMEDIO GENERAL %</span><br><span style="font-size:1.6rem;font-weight:bold;color:#27ae60;">{prom_tab:.1f}%</span></div>', unsafe_allow_html=True)
-        st.divider()
-        # [Resto de lógica de botones y gráfico de tableros igual...]
-
-    # --- DIMENSIÓN: DESEMPEÑO GRAL ---
-    elif "Desempeño Gral." in st.session_state.pagina:
-        cats = {"ESTRELLA": df_final[df_final[m['final']]>=90], "PROFESIONAL": df_final[(df_final[m['final']]>=80)&(df_final[m['final']]<90)], "CLAVE": df_final[(df_final[final_m]>=70)&(df_final[m['final']]<80)], "ENIGMA": df_final[(df_final[m['final']]>=60)&(df_final[m['final']]<70)], "RIESGO": df_final[df_final[m['final']]<60]}
         c_btns = st.columns(5)
         for i, (k, v) in enumerate(cats.items()):
             if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
+        
+        if st.session_state.det_sel in cats:
+            st.write(f"### Detalle: {st.session_state.det_sel}")
+            st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+
+        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio General: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        
         df_p = df_final.dropna(subset=[m['comp'], m['tablero']])
         if not df_p.empty:
             fig = px.scatter(df_p, x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
             fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
             st.plotly_chart(fig, use_container_width=True)
+
+    # --- DIMENSIÓN: COMPETENCIAS (CON COBERTURA) ---
+    elif "Competencias" in st.session_state.pagina:
+        evaluados = df_final[m['comp']].notna().sum()
+        no_evaluados = df_final[m['comp']].isna().sum()
+        promedio = df_final[m['comp']].mean() if evaluados > 0 else 0
+
+        qc1, qc2, qc3, qc4 = st.columns(4)
+        with qc1: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">DOTACIÓN</span><br><span style="font-size:1.6rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        with qc2: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">EVALUADOS</span><br><span style="font-size:1.6rem;font-weight:bold;color:#3498db;">{evaluados}</span></div>', unsafe_allow_html=True)
+        with qc3: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">SIN EVALUAR ("-")</span><br><span style="font-size:1.6rem;font-weight:bold;color:#e74c3c;">{no_evaluados}</span></div>', unsafe_allow_html=True)
+        with qc4: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">PROMEDIO COMP.</span><br><span style="font-size:1.6rem;font-weight:bold;color:#6f42c1;">{promedio:.1f}%</span></div>', unsafe_allow_html=True)
+        st.divider()
+        
+        # Gráfico semáforo
+        df_s = df_final.dropna(subset=[m['comp']])
+        cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
+        fig_c = px.strip(df_s, x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_c, use_container_width=True)
+
+    # --- DIMENSIÓN: TABLEROS (CON COBERTURA) ---
+    elif "Tableros" in st.session_state.pagina:
+        tienen = df_final[m['tablero']].notna().sum()
+        no_tienen = df_final[m['tablero']].isna().sum()
+        promedio = df_final[m['tablero']].mean() if tienen > 0 else 0
+
+        qt1, qt2, qt3, qt4 = st.columns(4)
+        with qt1: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">DOTACIÓN</span><br><span style="font-size:1.6rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        with qt2: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">TIENEN TABLERO</span><br><span style="font-size:1.6rem;font-weight:bold;color:#3498db;">{tienen}</span></div>', unsafe_allow_html=True)
+        with qt3: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">SIN TABLERO ("-")</span><br><span style="font-size:1.6rem;font-weight:bold;color:#e74c3c;">{no_tienen}</span></div>', unsafe_allow_html=True)
+        with qt4: st.markdown(f'<div class="kpi-card"><span style="font-size:0.8rem;font-weight:bold;color:#636e72;">PROMEDIO TABLERO</span><br><span style="font-size:1.6rem;font-weight:bold;color:#27ae60;">{promedio:.1f}%</span></div>', unsafe_allow_html=True)
+        st.divider()
 
     # --- DIMENSIÓN: EVOLUCIÓN ---
     elif "Evolución" in st.session_state.pagina:
@@ -171,4 +172,4 @@ if df_raw is not None:
         else: st.info("👈 Selecciona un colaborador.")
 
 else:
-    st.error("Error al cargar la información de Grupo Cenoa.")
+    st.error("Error al cargar los datos.")
