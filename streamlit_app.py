@@ -4,9 +4,8 @@ import plotly.express as px
 import urllib.parse
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V37.0 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V37.1 | Grupo Cenoa", layout="wide")
 
-# Inicialización de estados de navegación y detalles
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_gen' not in st.session_state: st.session_state.det_gen = None
 if 'det_comp' not in st.session_state: st.session_state.det_comp = None
@@ -30,7 +29,7 @@ st.markdown("""
 
 # --- 3. CARGA DE DATOS ---
 @st.cache_data(ttl=60)
-def load_data_v37():
+def load_data_v37_1():
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
         sheet_name = urllib.parse.quote("DESEMPEÑO")
@@ -51,15 +50,25 @@ def load_data_v37():
             parts = name.split()
             return (parts[0][0] + (parts[1][0] if len(parts)>1 else "")).upper()
         df['Inic'] = df[m['nombre']].apply(calc_init)
+        
+        # Función para semáforo
+        def get_color_sem(val):
+            if pd.isna(val): return "Sin Dato"
+            if val >= 90: return "Verde (>90%)"
+            if val >= 80: return "Amarillo (80-90%)"
+            return "Rojo (<80%)"
+        df['Sem_Comp'] = df[m['comp']].apply(get_color_sem)
+        df['Sem_Tab'] = df[m['tablero']].apply(get_color_sem)
+        
         return df, m
     except: return None, None
 
-df_raw, m = load_data_v37()
+df_raw, m = load_data_v37_1()
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard V37.0")
+    st.caption("Dashboard V37.1")
     st.markdown('<p class="sidebar-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
     menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
     st.session_state.pagina = st.radio("Menu", menu, label_visibility="collapsed")
@@ -68,7 +77,6 @@ with st.sidebar:
 if df_raw is not None:
     st.header(st.session_state.pagina.split(" ", 1)[1])
 
-    # FILTROS
     c1, c2, c3, c4, c_dot = st.columns([1.5, 1.5, 1.5, 2.5, 1])
     with c1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with c2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
@@ -85,14 +93,16 @@ if df_raw is not None:
         st.markdown(f'<div class="dotacion-card"><span style="font-size:0.7rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.5rem;font-weight:bold;">{len(df)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- PÁGINA 1: DESEMPEÑO GRAL ---
+    # Mapa de Colores Común
+    color_map = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
+
+    # --- PÁGINA 1: DESEMPEÑO GRAL (MATRIZ INTERACTIVA) ---
     if "Desempeño Gral." in st.session_state.pagina:
         dic_gen = {"ESTRELLA": df[df[m['final']] >= 90], "PROFESIONAL": df[(df[m['final']] >= 80) & (df[m['final']] < 90)], "CLAVE": df[(df[m['final']] >= 70) & (df[m['final']] < 80)], "ENIGMA": df[(df[m['final']] >= 60) & (df[m['final']] < 70)], "RIESGO": df[df[m['final']] < 60]}
         cb = st.columns(5)
         for i, (nom, d_cat) in enumerate(dic_gen.items()):
             if cb[i].button(f"{nom}\n({len(d_cat)})"): st.session_state.det_gen = nom
         if st.session_state.det_gen:
-            st.subheader(f"Listado: {st.session_state.det_gen}")
             df_d = dic_gen[st.session_state.det_gen]
             df_d['Valor'] = df_d.apply(lambda r: f"R:{r[m['tablero']]:.0f}% / P:{r[m['comp']]:.0f}%", axis=1)
             st.dataframe(df_d[[m['nombre'], m['puesto'], m['area'], 'Valor']], use_container_width=True)
@@ -104,43 +114,41 @@ if df_raw is not None:
             fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
             st.plotly_chart(fig, use_container_width=True)
 
-    # --- PÁGINA 2: COMPETENCIAS ---
+    # --- PÁGINA 2: COMPETENCIAS (DISPERSIÓN POR EMPRESA + SEMÁFORO) ---
     elif "Competencias" in st.session_state.pagina:
         dic_comp = {"CRÍTICO": df[df[m['comp']] < 70], "ESPERADO": df[(df[m['comp']] >= 70) & (df[m['comp']] < 85)], "ALTO": df[(df[m['comp']] >= 85) & (df[m['comp']] < 95)], "SOBRESALIENTE": df[df[m['comp']] >= 95]}
         cc = st.columns(4)
         for i, (nom, d_cat) in enumerate(dic_comp.items()):
             if cc[i].button(f"{nom}\n({len(d_cat)})"): st.session_state.det_comp = nom
         if st.session_state.det_comp:
-            st.dataframe(dic_comp[st.session_state.det_comp][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
+            st.dataframe(dic_comp[st.session_state.det_comp][[m['nombre'], m['empresa'], m['comp']]], use_container_width=True)
             if st.button("Cerrar Detalle Comp."): st.session_state.det_comp = None; st.rerun()
-        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio Competencias: <b>{df[m["comp"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
-        fig_s = px.strip(df.dropna(subset=[m['comp']]), x=m['area'], y=m['comp'], color=m['area'], hover_name=m['nombre'], height=500, template="plotly_white")
+        
+        st.subheader("Dispersión de Competencias por Empresa")
+        df_c_plot = df.dropna(subset=[m['comp']])
+        fig_s = px.strip(df_c_plot, x=m['empresa'], y=m['comp'], color='Sem_Comp', 
+                         color_discrete_map=color_map, hover_name=m['nombre'], height=550, template="plotly_white")
+        fig_s.update_traces(marker=dict(size=10, opacity=0.7))
+        fig_s.update_layout(xaxis_title="Empresa", yaxis_title="Competencias %", showlegend=True)
         st.plotly_chart(fig_s, use_container_width=True)
 
-    # --- PÁGINA 3: TABLEROS (NUEVA) ---
+    # --- PÁGINA 3: TABLEROS (DISPERSIÓN POR EMPRESA + SEMÁFORO) ---
     elif "Tableros" in st.session_state.pagina:
-        # Lógica idéntica a competencias pero con m['tablero']
-        dic_tab = {
-            "CRÍTICO": df[df[m['tablero']] < 70],
-            "ESPERADO": df[(df[m['tablero']] >= 70) & (df[m['tablero']] < 85)],
-            "ALTO": df[(df[m['tablero']] >= 85) & (df[m['tablero']] < 95)],
-            "SOBRESALIENTE": df[df[m['tablero']] >= 95]
-        }
+        dic_tab = {"CRÍTICO": df[df[m['tablero']] < 70], "ESPERADO": df[(df[m['tablero']] >= 70) & (df[m['tablero']] < 85)], "ALTO": df[(df[m['tablero']] >= 85) & (df[m['tablero']] < 95)], "SOBRESALIENTE": df[df[m['tablero']] >= 95]}
         ct = st.columns(4)
         for i, (nom, d_cat) in enumerate(dic_tab.items()):
             if ct[i].button(f"{nom}\n({len(d_cat)})"): st.session_state.det_tab = nom
-        
         if st.session_state.det_tab:
-            st.subheader(f"Listado Tableros: {st.session_state.det_tab}")
-            st.dataframe(dic_tab[st.session_state.det_tab][[m['nombre'], m['area'], m['puesto'], m['tablero']]], use_container_width=True)
+            st.dataframe(dic_tab[st.session_state.det_tab][[m['nombre'], m['empresa'], m['tablero']]], use_container_width=True)
             if st.button("Cerrar Detalle Tablero"): st.session_state.det_tab = None; st.rerun()
 
-        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Desempeño Comercial Acumulado (Tablero). Promedio: <b>{df[m["tablero"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
-        
-        # Gráfico de distribución para Tableros
-        fig_t = px.strip(df.dropna(subset=[m['tablero']]), x=m['area'], y=m['tablero'], color=m['area'], hover_name=m['nombre'], height=500, template="plotly_white")
-        fig_t.update_layout(yaxis_title="Resultado Tablero %")
+        st.subheader("Dispersión de Resultados (Tablero) por Empresa")
+        df_t_plot = df.dropna(subset=[m['tablero']])
+        fig_t = px.strip(df_t_plot, x=m['empresa'], y=m['tablero'], color='Sem_Tab', 
+                         color_discrete_map=color_map, hover_name=m['nombre'], height=550, template="plotly_white")
+        fig_t.update_traces(marker=dict(size=10, opacity=0.7))
+        fig_t.update_layout(xaxis_title="Empresa", yaxis_title="Resultado Tablero %", showlegend=True)
         st.plotly_chart(fig_t, use_container_width=True)
 
 else:
-    st.error("Error de conexión.")
+    st.error("Conexión fallida.")
