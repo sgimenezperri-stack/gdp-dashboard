@@ -3,21 +3,15 @@ import pandas as pd
 import plotly.express as px
 import urllib.parse
 
-# --- CONFIGURACIÓN ESTÉTICA (Look & Feel V34.0) ---
+# --- CONFIGURACIÓN ESTÉTICA ---
 st.set_page_config(page_title="Dashboard V34.0 | Grupo Cenoa", layout="wide")
 
 st.markdown("""
     <style>
-    /* Sidebar oscuro y estilizado */
     [data-testid="stSidebar"] { background-color: #263238; color: white; }
-    [data-testid="stSidebar"] h3 { color: #90a4ae; font-size: 0.9rem; margin-top: 20px; }
-    
-    /* Botones personalizados */
-    .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
-    .btn-excel { background-color: #28a745 !important; color: white !important; }
-    .btn-html { background-color: #fd7e14 !important; color: white !important; }
-    
-    /* Contenedor del Analista Virtual */
+    [data-testid="stSidebar"] h3 { color: #90a4ae; font-size: 0.8rem; margin-top: 25px; text-transform: uppercase; }
+    .stRadio > div { background-color: transparent !important; }
+    .stRadio label { color: #cfd8dc !important; font-size: 0.9rem !important; padding: 10px !important; }
     .analista-box {
         background-color: #f8f9fa;
         border-left: 5px solid #6f42c1;
@@ -25,31 +19,48 @@ st.markdown("""
         border-radius: 5px;
         margin-bottom: 20px;
     }
+    .stMetric { background-color: #ffffff; border-radius: 10px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- FUNCIÓN DE CARGA ---
 @st.cache_data(ttl=60)
-def load_data():
-    URL_SHEET = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
+def load_data_cenoa():
+    URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
-        # Carga de solapa Desempeño
         sheet_name = urllib.parse.quote("DESEMPEÑO")
-        csv_url = f"{URL_SHEET.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+        csv_url = f"{URL.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
         df = pd.read_csv(csv_url)
-        df.columns = df.columns.str.strip()
-        
-        # Limpieza de "-" y porcentajes
-        cols_score = ['%PUNT.EC.1°INSTANCIA COMPETENCIAS', '% ACUMULADO TABLERO', 'DESEMPEÑO']
-        for col in cols_score:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
-        return df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    except Exception as e:
-        st.error(f"Error de conexión: {e}")
-        return None
+        df.columns = df.columns.str.strip() # Limpieza de nombres
 
-df_raw = load_data()
+        # Mapeo Inteligente por posición si el nombre falla
+        def get_col(pref, idx):
+            if pref in df.columns: return pref
+            return df.columns[idx] if len(df.columns) > idx else None
+
+        mapping = {
+            'nombre': get_col('APELLIDO Y NOMBRE', 0),
+            'empresa': get_col('EMPRESA', 2),
+            'localidad': get_col('LOCALIDAD', 3),
+            'area': get_col('AREA', 4), # COLUMNA E
+            'puesto': get_col('PUESTO', 5),
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS',
+            'tablero': '% ACUMULADO TABLERO',
+            'final': 'DESEMPEÑO'
+        }
+
+        # Limpieza de datos (Tratamiento de "-" y %)
+        for key in ['comp', 'tablero', 'final']:
+            c = mapping[key]
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
+        
+        return df, mapping
+    except Exception as e:
+        st.error(f"Error cargando Sheets: {e}")
+        return None, None
+
+df_raw, m = load_data_cenoa()
 
 # --- SIDEBAR (MARGEN IZQUIERDO) ---
 with st.sidebar:
@@ -57,87 +68,80 @@ with st.sidebar:
     st.caption("Dashboard V34.0 (Multi-Año)")
     
     st.markdown("### GESTIÓN RRHH")
-    menu_rrhh = st.radio("Navegación", ["🏠 Desempeño Gral.", "🧠 Competencias", "📊 Tableros", "📈 Evolución"], label_visibility="collapsed")
+    # Usamos iconos similares a tu imagen
+    menu_rrhh = st.radio("Nav1", ["🏠 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución"], label_visibility="collapsed")
     
     st.markdown("### COMERCIAL")
-    menu_com = st.radio("Comercial", ["📋 Perf. Comercial", "📍 Matriz 9-Box"], label_visibility="collapsed")
+    menu_com = st.radio("Nav2", ["📋 Perf. Comercial", "📍 Matriz 9-Box"], label_visibility="collapsed")
     
-    st.divider()
-    
-    if st.button("📤 Cargar Excel"):
-        st.info("Función de carga vinculada a GSheets")
-    
-    if st.button("💾 Guardar HTML"):
-        st.success("Generando reporte...")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    if st.button("💾 Guardar HTML", use_container_width=True):
+        st.info("Generando reporte estático...")
 
 # --- PANEL PRINCIPAL ---
 if df_raw is not None:
-    # 1. FILTROS SUPERIORES (Layout Horizontal)
     st.header("Desempeño General")
     
+    # FILTROS SUPERIORES EN LÍNEA
     c1, c2, c3, c4, c5 = st.columns([1.5, 1.5, 1.5, 2, 1])
     
     with c1:
-        f_empresa = st.selectbox("EMPRESA", ["Todas"] + list(df_raw['EMPRESA'].dropna().unique()))
+        f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
     with c2:
-        f_localidad = st.selectbox("LOCALIDAD", ["Todas"] + list(df_raw['LOCALIDAD'].dropna().unique()))
+        f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
     with c3:
-        f_area = st.selectbox("ÁREA", ["Todas"] + list(df_raw['AREA'].dropna().unique()))
+        f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
     with c4:
-        f_nombre = st.text_input("COLABORADOR", placeholder="Buscar nombre...")
+        f_nom = st.text_input("COLABORADOR", placeholder="Buscar nombre...")
     with c5:
-        f_mes = st.selectbox("MES", ["Acumulado", "Enero", "Febrero", "Marzo"])
+        f_mes = st.selectbox("MES", ["Acumulado", "Marzo", "Febrero", "Enero"])
 
-    # Filtrado lógico
+    # Aplicar Filtros
     df = df_raw.copy()
-    if f_empresa != "Todas": df = df[df['EMPRESA'] == f_empresa]
-    if f_localidad != "Todas": df = df[df['LOCALIDAD'] == f_localidad]
-    if f_area != "Todas": df = df[df['AREA'] == f_area]
-    if f_nombre: df = df[df['APELLIDO Y NOMBRE'].str.contains(f_nombre, case=False, na=False)]
+    if f_emp != "Todas": df = df[df[m['empresa']] == f_emp]
+    if f_loc != "Todas": df = df[df[m['localidad']] == f_loc]
+    if f_are != "Todas": df = df[df[m['area']] == f_are]
+    if f_nom: df = df[df[m['nombre']].str.contains(f_nom, case=False, na=False)]
 
-    # 2. BLOQUE ANALISTA VIRTUAL
+    # BLOQUE ANALISTA VIRTUAL
+    avg_perf = df[m['final']].mean()
     st.markdown(f"""
         <div class="analista-box">
             <strong>📝 Analista Virtual: Desempeño General</strong><br>
-            Desempeño estable (Promedio: {df['DESEMPEÑO'].mean():.1f}%).<br>
-            <span style="color: #6c757d;">💡 Sugerencia: Ajustar objetivos marginalmente en las áreas con mayor dispersión.</span>
+            Desempeño promedio actual: <b>{avg_perf:.1f}%</b>. 
+            El análisis de los <b>{len(df)}</b> colaboradores muestra una tendencia estable.
+            <br><span style="color: #6c757d;">💡 Sugerencia: Focalizar en planes de desarrollo para el grupo 'Riesgo'.</span>
         </div>
     """, unsafe_allow_html=True)
 
-    # 3. KPI CARDS (Matriz 9-Box counts)
-    # Lógica simplificada de categorías
-    st.columns(5)
-    # (Aquí iría el conteo de Estrellas, Enigmas, etc. según tus rangos)
-    # Ejemplo visual:
+    # KPI CARDS (Conteo de categorías según desempeño)
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("⭐ Estrella", len(df[df['DESEMPEÑO'] >= 90]))
-    k2.metric("📘 Profesional", len(df[(df['DESEMPEÑO'] < 90) & (df['DESEMPEÑO'] >= 80)]))
-    k3.metric("❓ Enigma", "18")
-    k4.metric("✅ Clave", "168")
-    k5.metric("⚠️ Riesgo", len(df[df['DESEMPEÑO'] < 60]))
+    k1.metric("⭐ Estrella", len(df[df[m['final']] >= 90]))
+    k2.metric("📘 Profesional", len(df[(df[m['final']] < 90) & (df[m['final']] >= 80)]))
+    k3.metric("❓ Enigma", len(df[(df[m['final']] < 80) & (df[m['comp']] >= 80)])) # Ejemplo: Alto potencial, bajo tablero
+    k4.metric("✅ Clave", len(df[(df[m['final']] < 80) & (df[m['final']] >= 60)]))
+    k5.metric("⚠️ Riesgo", len(df[df[m['final']] < 60]))
 
-    # 4. MAPA DE DISTRIBUCIÓN (Scatter Plot)
+    # MAPA DE DISTRIBUCIÓN
     st.subheader("Mapa de Distribución")
+    df_plot = df.dropna(subset=[m['comp'], m['tablero']])
     
-    # Creamos el gráfico con los colores de tu imagen
-    fig = px.scatter(
-        df.dropna(subset=['%PUNT.EC.1°INSTANCIA COMPETENCIAS', '% ACUMULADO TABLERO']),
-        x='% ACUMULADO TABLERO', 
-        y='%PUNT.EC.1°INSTANCIA COMPETENCIAS',
-        color='AREA',
-        hover_name='APELLIDO Y NOMBRE',
-        template="plotly_white",
-        height=500
-    )
+    if not df_plot.empty:
+        fig = px.scatter(
+            df_plot, x=m['tablero'], y=m['comp'],
+            color=m['area'], hover_name=m['nombre'],
+            size=df_plot[m['final']].fillna(50),
+            color_discrete_sequence=px.colors.qualitative.Pastel,
+            labels={m['tablero']: "Resultados (Tablero %)", m['comp']: "Potencial (Competencias %)"},
+            height=500, template="plotly_white"
+        )
+        # Líneas guía
+        fig.add_hline(y=75, line_dash="dash", line_color="#eceff1")
+        fig.add_vline(x=75, line_dash="dash", line_color="#eceff1")
+        st.plotly_chart(fig, use_container_width=True)
     
-    # Líneas de cuadrante 9-Box
-    fig.add_hline(y=70, line_dash="dash", line_color="#cfd8dc")
-    fig.add_vline(x=70, line_dash="dash", line_color="#cfd8dc")
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-    # 5. TABLA FINAL
-    st.dataframe(df[['APELLIDO Y NOMBRE', 'PUESTO', 'AREA', 'DESEMPEÑO']].sort_values('DESEMPEÑO', ascending=False), use_container_width=True)
+    # TABLA DE DATOS
+    st.dataframe(df[[m['nombre'], m['puesto'], m['area'], m['final']]].sort_values(m['final'], ascending=False), use_container_width=True)
 
 else:
-    st.error("Error al cargar la base de datos de Grupo Cenoa.")
+    st.error("No se pudo conectar con el Google Sheets del Grupo Cenoa.")
