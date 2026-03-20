@@ -6,8 +6,9 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard V38.6 | Grupo Cenoa", layout="wide")
+st.set_page_config(page_title="Dashboard V39.0 | Grupo Cenoa", layout="wide")
 
+# Estados de navegación y detalles
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
@@ -27,7 +28,10 @@ st.markdown("""
         border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 70px; }
+    
+    /* Estilo de botones de categoría */
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 70px; transition: 0.3s; }
+    div.stButton > button:hover { border-color: #3498db; background-color: #f0f7ff; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -51,6 +55,7 @@ def load_all_data():
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
+        # Semáforos e Iniciales
         def get_sem(v):
             if pd.isna(v): return "Sin Dato"
             return "Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"
@@ -68,7 +73,10 @@ with st.sidebar:
     st.caption("Dashboard 2026")
     st.markdown('<p class="sidebar-title">GESTIÓN RRHH</p>', unsafe_allow_html=True)
     menu = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
-    st.session_state.pagina = st.radio("Menu", menu, label_visibility="collapsed")
+    seleccion = st.radio("Menu", menu, label_visibility="collapsed")
+    if st.session_state.pagina != seleccion:
+        st.session_state.pagina = seleccion
+        st.session_state.det_sel = None # Limpiar detalles al cambiar de página
 
 # --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
@@ -89,15 +97,14 @@ if df_raw is not None:
     df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
     
     with cols_f[4]:
-        st.markdown(f'<div class="kpi-card"><span style="font-size:0.6rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="font-size:0.6rem;font-weight:bold;color:#636e72;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;color:#2d3436;">{len(df_final)}</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # Mapa de Colores Semáforo
     cmap = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
 
     # --- PÁGINA: DESEMPEÑO GRAL ---
     if "Desempeño Gral." in st.session_state.pagina:
-        cats = {
+        cats_g = {
             "ESTRELLA": df_final[df_final[m['final']] >= 90],
             "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)],
             "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)],
@@ -105,13 +112,13 @@ if df_raw is not None:
             "RIESGO": df_final[df_final[m['final']] < 60]
         }
         c_btns = st.columns(5)
-        for i, (k, v) in enumerate(cats.items()):
+        for i, (k, v) in enumerate(cats_g.items()):
             if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
         
-        if st.session_state.det_sel in cats:
-            st.write(f"### Detalle: {st.session_state.det_sel}")
-            st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
-            if st.button("Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+        if st.session_state.det_sel in cats_g:
+            st.write(f"### Lista: {st.session_state.det_sel}")
+            st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
 
         st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         df_p = df_final.dropna(subset=[m['comp'], m['tablero']])
@@ -124,39 +131,67 @@ if df_raw is not None:
     elif "Competencias" in st.session_state.pagina:
         evals = df_final[m['comp']].notna().sum()
         no_evals = df_final[m['comp']].isna().sum()
-        prom = df_final[m['comp']].mean() if evals > 0 else 0
+        prom_c = df_final[m['comp']].mean() if evals > 0 else 0
 
+        # KPIs Cobertura
         q1, q2, q3, q4 = st.columns(4)
-        with q1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
+        with q1: st.markdown(f'<div class="kpi-card"><b>DOTACIÓN</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
         with q2: st.markdown(f'<div class="kpi-card"><b>EVALUADOS</b><br><h3 style="color:#3498db;">{evals}</h3></div>', unsafe_allow_html=True)
         with q3: st.markdown(f'<div class="kpi-card"><b>SIN EVALUAR</b><br><h3 style="color:#e74c3c;">{no_evals}</h3></div>', unsafe_allow_html=True)
-        with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom:.1f}%</h3></div>', unsafe_allow_html=True)
-        
+        with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom_c:.1f}%</h3></div>', unsafe_allow_html=True)
         st.divider()
+
+        # Botones de Categorías
+        cats_c = {
+            "CRÍTICO": df_final[df_final[m['comp']] < 70],
+            "ESPERADO": df_final[(df_final[m['comp']] >= 70) & (df_final[m['comp']] < 85)],
+            "ALTO": df_final[(df_final[m['comp']] >= 85) & (df_final[m['comp']] < 95)],
+            "SOBRESALIENTE": df_final[df_final[m['comp']] >= 95]
+        }
+        cc = st.columns(4)
+        for i, (k, v) in enumerate(cats_c.items()):
+            if cc[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
+        
+        if st.session_state.det_sel in cats_c:
+            st.write(f"### Detalle Competencias: {st.session_state.det_sel}")
+            st.dataframe(cats_c[st.session_state.det_sel][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
+            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+
         fig_c = px.strip(df_final.dropna(subset=[m['comp']]), x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map=cmap, hover_name=m['nombre'], height=500, template="plotly_white")
         st.plotly_chart(fig_c, use_container_width=True)
 
-    # --- PÁGINA: TABLEROS (RESTAURADO) ---
+    # --- PÁGINA: TABLEROS ---
     elif "Tableros" in st.session_state.pagina:
         tienen = df_final[m['tablero']].notna().sum()
         no_tienen = df_final[m['tablero']].isna().sum()
         prom_t = df_final[m['tablero']].mean() if tienen > 0 else 0
 
+        # KPIs Cobertura
         qt1, qt2, qt3, qt4 = st.columns(4)
-        with qt1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
+        with qt1: st.markdown(f'<div class="kpi-card"><b>DOTACIÓN</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
         with qt2: st.markdown(f'<div class="kpi-card"><b>TIENEN TABLERO</b><br><h3 style="color:#3498db;">{tienen}</h3></div>', unsafe_allow_html=True)
         with qt3: st.markdown(f'<div class="kpi-card"><b>SIN TABLERO</b><br><h3 style="color:#e74c3c;">{no_tienen}</h3></div>', unsafe_allow_html=True)
         with qt4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO TABLERO</b><br><h3 style="color:#27ae60;">{prom_t:.1f}%</h3></div>', unsafe_allow_html=True)
-        
         st.divider()
-        # REINSERCIÓN DEL GRÁFICO DE TABLERO
-        df_t = df_final.dropna(subset=[m['tablero']])
-        if not df_t.empty:
-            fig_t = px.strip(df_t, x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white")
-            fig_t.update_traces(marker=dict(size=12, opacity=0.7))
-            st.plotly_chart(fig_t, use_container_width=True)
-        else:
-            st.info("No hay datos de Tablero para mostrar el gráfico con los filtros actuales.")
+
+        # Botones de Categorías
+        cats_t = {
+            "CRÍTICO": df_final[df_final[m['tablero']] < 70],
+            "ESPERADO": df_final[(df_final[m['tablero']] >= 70) & (df_final[m['tablero']] < 85)],
+            "ALTO": df_final[(df_final[m['tablero']] >= 85) & (df_final[m['tablero']] < 95)],
+            "SOBRESALIENTE": df_final[df_final[m['tablero']] >= 95]
+        }
+        ct = st.columns(4)
+        for i, (k, v) in enumerate(cats_t.items()):
+            if ct[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
+        
+        if st.session_state.det_sel in cats_t:
+            st.write(f"### Detalle Tableros: {st.session_state.det_sel}")
+            st.dataframe(cats_t[st.session_state.det_sel][[m['nombre'], m['area'], m['tablero']]], use_container_width=True)
+            if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
+
+        fig_t = px.strip(df_final.dropna(subset=[m['tablero']]), x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map=cmap, hover_name=m['nombre'], height=550, template="plotly_white")
+        st.plotly_chart(fig_t, use_container_width=True)
 
     # --- PÁGINA: EVOLUCIÓN ---
     elif "Evolución" in st.session_state.pagina:
@@ -170,8 +205,7 @@ if df_raw is not None:
             with h2: st.markdown(f'<div class="kpi-card"><span style="color:#27ae60;font-size:2rem;font-weight:bold;">{prom_e:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
             fig_e = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
             fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
-            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %"))
+            fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165]))
             st.plotly_chart(fig_e, use_container_width=True)
 
-else:
-    st.error("Error al cargar la información.")
+else: st.error("Error de conexión.")
