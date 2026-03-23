@@ -6,12 +6,12 @@ import urllib.parse
 import numpy as np
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard Grupo Cenoa V43.1", layout="wide")
+st.set_page_config(page_title="Dashboard Grupo Cenoa | RRHH", layout="wide")
 
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS PREMIUM ---
+# --- 2. CSS PREMIUM (Sidebar RRHH + Estilos) ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #263238 !important; min-width: 320px !important; }
@@ -21,17 +21,11 @@ st.markdown("""
     [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
 
-    /* Inyección de Títulos de Bloque */
+    /* Inyección de Título de Bloque Único */
     [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1) { margin-top: 40px !important; }
     [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before {
         content: "GESTIÓN RRHH"; position: absolute; top: -35px; left: 10px;
         color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px;
-    }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5) { margin-top: 60px !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(5)::before {
-        content: "GESTIÓN COMERCIAL"; position: absolute; top: -35px; left: 10px;
-        color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px;
-        border-top: 1px solid rgba(144, 164, 174, 0.2); padding-top: 15px; width: 100%;
     }
 
     /* Estilos de KPI y Botones */
@@ -39,7 +33,6 @@ st.markdown("""
     .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; transition: 0.3s; }
     
-    /* Resaltado especial para botones de "Sin Dato" */
     .btn-audit button { border: 1px dashed #e74c3c !important; color: #e74c3c !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -61,9 +54,6 @@ def load_all_data():
             'final': 'DESEMPEÑO'
         }
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
-        # Backup de datos crudos para auditoría
-        df['raw_comp'] = df[m['comp']].astype(str).str.strip()
-        df['raw_tab'] = df[m['tablero']].astype(str).str.strip()
         
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
@@ -76,11 +66,11 @@ def load_all_data():
 
 df_raw, m = load_all_data()
 
-# --- 4. SIDEBAR ---
+# --- 4. SIDEBAR (SOLO RRHH) ---
 with st.sidebar:
     st.title("Grupo Cenoa")
-    st.caption("Dashboard 2026 | V43.1")
-    menu_items = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución", "🥇 Ranking Comercial", "📊 Perf. Comercial", "🔳 Matriz 9-Box"]
+    st.caption("Gestión RRHH | V43.2")
+    menu_items = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución"]
     seleccion = st.radio("Nav", menu_items, index=menu_items.index(st.session_state.pagina) if st.session_state.pagina in menu_items else 0, label_visibility="collapsed")
     if st.session_state.pagina != seleccion:
         st.session_state.pagina = seleccion
@@ -137,7 +127,7 @@ if df_raw is not None:
         with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom_c:.1f}%</h3></div>', unsafe_allow_html=True)
         
         if st.session_state.det_sel == "AUDIT_COMP":
-            st.error(f"⚠️ Colaboradores sin Evaluación de Competencias ({no_evals})")
+            st.error(f"⚠️ Colaboradores sin Evaluación ({no_evals})")
             st.dataframe(df_final[df_final[m['comp']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
             if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
         
@@ -164,7 +154,7 @@ if df_raw is not None:
         with qt4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO TABLERO</b><br><h3 style="color:#27ae60;">{prom_t:.1f}%</h3></div>', unsafe_allow_html=True)
         
         if st.session_state.det_sel == "AUDIT_TAB":
-            st.error(f"⚠️ Colaboradores sin Carga de Tablero ({no_tienen})")
+            st.error(f"⚠️ Colaboradores sin Tablero ({no_tienen})")
             st.dataframe(df_final[df_final[m['tablero']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
             if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
         
@@ -194,13 +184,4 @@ if df_raw is not None:
             st.plotly_chart(fig_e, use_container_width=True)
         else: st.info("👈 Seleccione un colaborador en el filtro superior para ver resultados.")
 
-    # --- PÁGINA: RANKING COMERCIAL ---
-    elif "Ranking Comercial" in st.session_state.pagina:
-        st.subheader("Top 10 Colaboradores por Desempeño Comercial")
-        df_r = df_f[df_f[m['tablero']].notna()].sort_values(by=m['tablero'], ascending=False).head(10)
-        if not df_r.empty:
-            st.plotly_chart(px.bar(df_r, x=m['tablero'], y=m['nombre'], orientation='h', color=m['tablero'], color_continuous_scale='RdYlGn', text_auto='.1f').update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_white"), use_container_width=True)
-            st.dataframe(df_f[[m['nombre'], m['empresa'], m['puesto'], m['tablero']]].sort_values(by=m['tablero'], ascending=False), use_container_width=True)
-        else: st.warning("Sin datos de Tablero.")
-
-else: st.error("Error al cargar datos.")
+else: st.error("Error al cargar datos de la solapa DESEMPEÑO.")
