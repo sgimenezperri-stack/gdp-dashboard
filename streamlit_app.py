@@ -4,42 +4,87 @@ import plotly.express as px
 import plotly.graph_objects as go
 import urllib.parse
 import numpy as np
+from datetime import datetime
 
-# --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Dashboard Grupo Cenoa | RRHH", layout="wide")
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Gestión de Desempeño | Grupo Cenoa", layout="wide", initial_sidebar_state="expanded")
 
+# Inicialización de estados
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS PREMIUM (Sidebar RRHH + Estilos) ---
+# --- 2. CSS AVANZADO (DISEÑO PROFESIONAL) ---
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] { background-color: #263238 !important; min-width: 320px !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label { padding: 12px 20px !important; background-color: transparent !important; border-radius: 10px !important; margin-bottom: 8px !important; transition: all 0.3s ease; position: relative; }
-    [data-testid="stRadio"] label p { color: #cfd8dc !important; font-size: 1.05rem !important; font-weight: 500 !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
-
-    /* Inyección de Título de Bloque Único */
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1) { margin-top: 40px !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before {
-        content: "GESTIÓN RRHH"; position: absolute; top: -35px; left: 10px;
-        color: #90a4ae; font-size: 0.8rem; font-weight: 800; letter-spacing: 1.5px;
-    }
-
-    /* Estilos de KPI y Botones */
-    .kpi-card { background-color: #ffffff; border-radius: 15px; padding: 15px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; transition: 0.3s; }
+    /* Fondo General y Fuentes */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
-    .btn-audit button { border: 1px dashed #e74c3c !important; color: #e74c3c !important; }
+    /* Sidebar Profesional */
+    [data-testid="stSidebar"] { background-color: #1e272e !important; min-width: 320px !important; }
+    
+    /* Logo y Título Sidebar */
+    .sidebar-header { padding: 20px; text-align: center; border-bottom: 1px solid #34495e; margin-bottom: 20px; }
+    .sidebar-header h1 { color: white; font-size: 0.9rem; font-weight: 800; letter-spacing: 2px; margin-top: 10px; }
+    .update-text { color: #95a5a6; font-size: 0.7rem; margin-bottom: 15px; }
+
+    /* Ocultar Radio Nativo y Estilar Botones de Menú */
+    [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
+    [data-testid="stRadio"] div[role="radiogroup"] label {
+        padding: 14px 20px !important;
+        background-color: #2c3e50 !important;
+        border-radius: 12px !important;
+        margin-bottom: 10px !important;
+        transition: all 0.3s ease;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    [data-testid="stRadio"] label p { color: #bdc3c7 !important; font-size: 0.95rem !important; font-weight: 600 !important; }
+    
+    /* Botón de Menú Seleccionado */
+    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] {
+        background-color: #3498db !important;
+        border: 1px solid #5dade2;
+        box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+    }
+    [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: 800 !important; }
+
+    /* Estilo de los Filtros (Selectboxes) */
+    div[data-baseweb="select"] > div {
+        background-color: #f8f9fa !important;
+        border-radius: 10px !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    /* Cuadrantes KPI */
+    .kpi-card { 
+        background: white; border-radius: 16px; padding: 20px; text-align: center; 
+        border: 1px solid #edf2f7; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
+    }
+    .kpi-card h3 { margin: 10px 0 0 0; font-size: 1.8rem; color: #2d3748; }
+    .kpi-card span { font-size: 0.75rem; font-weight: 700; color: #718096; text-transform: uppercase; }
+
+    /* Botones de Categoría */
+    div.stButton > button {
+        border-radius: 12px; font-weight: 700; background-color: white; 
+        border: 1px solid #e2e8f0; height: 75px; transition: all 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    div.stButton > button:hover { border-color: #3498db; color: #3498db; transform: translateY(-2px); }
+    
+    /* Botón Actualizar Sidebar */
+    .stButton>button[kind="secondary"] {
+        background-color: #34495e !important; color: white !important;
+        height: 35px !important; font-size: 0.8rem !important; border: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 3. CARGA DE DATOS ---
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600) # Se actualiza cada 10 min o manualmente
 def load_all_data():
+    URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5o (Tú URL Real)"
+    # Como ejemplo uso la URL del usuario de los turnos anteriores:
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
         sheet_name = urllib.parse.quote("DESEMPEÑO")
@@ -49,27 +94,37 @@ def load_all_data():
         m = {
             'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
             'area': df.columns[4], 'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 
-            'tablero': '% ACUMULADO TABLERO', 
-            'final': 'DESEMPEÑO'
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'
         }
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
-        
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
-        df['Sem_Comp'] = df[m['comp']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
-        df['Sem_Tab'] = df[m['tablero']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
         df['Inic'] = df[m['nombre']].apply(lambda x: (x.split()[0][0] + (x.split()[1][0] if len(x.split())>1 else "")).upper() if len(x)>3 else "")
-        return df, m
-    except: return None, None
+        return df, m, datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    except: return None, None, None
 
-df_raw, m = load_all_data()
+df_raw, m, last_update = load_all_data()
 
-# --- 4. SIDEBAR (SOLO RRHH) ---
+# --- 4. MARGEN IZQUIERDO (CABECERA + NAVEGACIÓN) ---
 with st.sidebar:
-    st.title("Grupo Cenoa")
-    st.caption("Gestión RRHH | V43.2")
+    # Header con Logo y Título
+    st.markdown(f"""
+        <div class="sidebar-header">
+            <img src="https://logodownload.org/wp-content/uploads/2014/10/toyota-logo-2-1.png" width="80" style="filter: brightness(0) invert(1);">
+            <h1>GESTIÓN DE DESEMPEÑO<br>GRUPO CENOA</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Info de Actualización y Botón
+    st.markdown(f'<p class="update-text" style="text-align:center;">🕒 Última actualización:<br><b>{last_update}</b></p>', unsafe_allow_html=True)
+    if st.button("🔄 ACTUALIZAR AHORA", use_container_width=True, type="secondary"):
+        st.cache_data.clear()
+        st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Menú de Navegación
     menu_items = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución"]
     seleccion = st.radio("Nav", menu_items, index=menu_items.index(st.session_state.pagina) if st.session_state.pagina in menu_items else 0, label_visibility="collapsed")
     if st.session_state.pagina != seleccion:
@@ -79,25 +134,26 @@ with st.sidebar:
 
 # --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
-    st.header(st.session_state.pagina.split(" ", 1)[1])
+    st.markdown(f"<h2 style='color:#1a202c;'>{st.session_state.pagina.split(' ', 1)[1]}</h2>", unsafe_allow_html=True)
 
-    # FILTROS
-    cf1, cf2, cf3, cf4, ckpi = st.columns([1.5, 1.5, 1.5, 2.5, 1])
-    with cf1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
-    with cf2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
-    with cf3: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
-    
-    df_f = df_raw.copy()
-    if f_emp != "Todas": df_f = df_f[df_f[m['empresa']] == f_emp]
-    if f_loc != "Todas": df_f = df_f[df_f[m['localidad']] == f_loc]
-    if f_are != "Todas": df_f = df_f[df_f[m['area']] == f_are]
+    # FILTROS ESTILIZADOS
+    with st.container():
+        cf1, cf2, cf3, cf4, ckpi = st.columns([1.5, 1.5, 1.5, 2.5, 1])
+        with cf1: f_emp = st.selectbox("🏢 EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
+        with cf2: f_loc = st.selectbox("📍 LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
+        with cf3: f_are = st.selectbox("📂 ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
+        
+        df_f = df_raw.copy()
+        if f_emp != "Todas": df_f = df_f[df_f[m['empresa']] == f_emp]
+        if f_loc != "Todas": df_f = df_f[df_f[m['localidad']] == f_loc]
+        if f_are != "Todas": df_f = df_f[df_f[m['area']] == f_are]
 
-    nombres_disp = sorted(df_f[m['nombre']].unique().tolist())
-    with cf4: f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disp)
-    df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
-    
-    with ckpi:
-        st.markdown(f'<div class="kpi-card"><span style="font-size:0.6rem;font-weight:bold;">DOTACIÓN</span><br><span style="font-size:1.3rem;font-weight:bold;">{len(df_final)}</span></div>', unsafe_allow_html=True)
+        nombres_disp = sorted(df_f[m['nombre']].unique().tolist())
+        with cf4: f_nom = st.selectbox("🔍 COLABORADOR", ["Todos"] + nombres_disp)
+        df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
+        
+        with ckpi:
+            st.markdown(f'<div class="kpi-card"><span>Dotación</span><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
     st.divider()
 
     # --- PÁGINA: DESEMPEÑO GRAL ---
@@ -107,66 +163,37 @@ if df_raw is not None:
         for i, (k, v) in enumerate(cats_g.items()):
             if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
         if st.session_state.det_sel in cats_g:
-            st.write(f"### Detalle: {st.session_state.det_sel}"); st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+            st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
             if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
-        st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
+        
+        st.markdown(f'<div class="analista-box"><strong>📊 People Analytics:</strong> El promedio del grupo filtrado es de <b>{df_final[m["final"]].mean():.1f}%</b>.</div>', unsafe_allow_html=True)
+        
         fig = px.scatter(df_final.dropna(subset=[m['comp'], m['tablero']]), x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
         fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- PÁGINA: COMPETENCIAS ---
-    elif "Competencias" in st.session_state.pagina:
-        evals = df_final[m['comp']].notna().sum(); no_evals = df_final[m['comp']].isna().sum(); prom_c = df_final[m['comp']].mean() if evals > 0 else 0
+    # --- PÁGINA: COMPETENCIAS / TABLEROS ---
+    elif st.session_state.pagina in ["🧠 Competencias", "📑 Tableros"]:
+        is_comp = "Competencias" in st.session_state.pagina
+        col_d = m['comp'] if is_comp else m['tablero']
+        evals = df_final[col_d].notna().sum(); no_evals = df_final[col_d].isna().sum(); prom = df_final[col_d].mean() if evals > 0 else 0
+        
         q1, q2, q3, q4 = st.columns(4)
-        with q1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
-        with q2: st.markdown(f'<div class="kpi-card"><b>EVALUADOS</b><br><h3 style="color:#3498db;">{evals}</h3></div>', unsafe_allow_html=True)
+        with q1: st.markdown(f'<div class="kpi-card"><span>Total</span><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
+        with q2: st.markdown(f'<div class="kpi-card"><span>Evaluados</span><h3 style="color:#3498db;">{evals}</h3></div>', unsafe_allow_html=True)
         with q3:
             st.markdown('<div class="btn-audit">', unsafe_allow_html=True)
-            if st.button(f"SIN EVALUAR\n({no_evals})"): st.session_state.det_sel = "AUDIT_COMP"
+            if st.button(f"SIN DATO\n({no_evals})"): st.session_state.det_sel = "AUDIT"
             st.markdown('</div>', unsafe_allow_html=True)
-        with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom_c:.1f}%</h3></div>', unsafe_allow_html=True)
+        with q4: st.markdown(f'<div class="kpi-card"><span>Promedio %</span><h3 style="color:#2ecc71;">{prom:.1f}%</h3></div>', unsafe_allow_html=True)
         
-        if st.session_state.det_sel == "AUDIT_COMP":
-            st.error(f"⚠️ Colaboradores sin Evaluación ({no_evals})")
-            st.dataframe(df_final[df_final[m['comp']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
+        if st.session_state.det_sel == "AUDIT":
+            st.dataframe(df_final[df_final[col_d].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
             if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
         
         st.divider()
-        cats_c = {"CRÍTICO": df_final[df_final[m['comp']] < 70], "ESPERADO": df_final[(df_final[m['comp']] >= 70) & (df_final[m['comp']] < 85)], "ALTO": df_final[(df_final[m['comp']] >= 85) & (df_final[m['comp']] < 95)], "SOBRESALIENTE": df_final[df_final[m['comp']] >= 95]}
-        cc = st.columns(4)
-        for i, (k, v) in enumerate(cats_c.items()):
-            if cc[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        if st.session_state.det_sel in cats_c:
-            st.dataframe(cats_c[st.session_state.det_sel][[m['nombre'], m['area'], m['comp']]], use_container_width=True)
-            if st.button("Cerrar"): st.session_state.det_sel = None; st.rerun()
-        st.plotly_chart(px.strip(df_final.dropna(subset=[m['comp']]), x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map={"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b"}, hover_name=m['nombre'], height=500, template="plotly_white"), use_container_width=True)
-
-    # --- PÁGINA: TABLEROS ---
-    elif "Tableros" in st.session_state.pagina:
-        tienen = df_final[m['tablero']].notna().sum(); no_tienen = df_final[m['tablero']].isna().sum(); prom_t = df_final[m['tablero']].mean() if tienen > 0 else 0
-        qt1, qt2, qt3, qt4 = st.columns(4)
-        with qt1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
-        with qt2: st.markdown(f'<div class="kpi-card"><b>CON TABLERO</b><br><h3 style="color:#3498db;">{tienen}</h3></div>', unsafe_allow_html=True)
-        with qt3:
-            st.markdown('<div class="btn-audit">', unsafe_allow_html=True)
-            if st.button(f"SIN TABLERO\n({no_tienen})"): st.session_state.det_sel = "AUDIT_TAB"
-            st.markdown('</div>', unsafe_allow_html=True)
-        with qt4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO TABLERO</b><br><h3 style="color:#27ae60;">{prom_t:.1f}%</h3></div>', unsafe_allow_html=True)
-        
-        if st.session_state.det_sel == "AUDIT_TAB":
-            st.error(f"⚠️ Colaboradores sin Tablero ({no_tienen})")
-            st.dataframe(df_final[df_final[m['tablero']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
-            if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
-        
-        st.divider()
-        cats_t = {"CRÍTICO": df_final[df_final[m['tablero']] < 70], "ESPERADO": df_final[(df_final[m['tablero']] >= 70) & (df_final[m['tablero']] < 85)], "ALTO": df_final[(df_final[m['tablero']] >= 85) & (df_final[m['tablero']] < 95)], "SOBRESALIENTE": df_final[df_final[m['tablero']] >= 95]}
-        ct = st.columns(4)
-        for i, (k, v) in enumerate(cats_t.items()):
-            if ct[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        if st.session_state.det_sel in cats_t:
-            st.dataframe(cats_t[st.session_state.det_sel][[m['nombre'], m['area'], m['tablero']]], use_container_width=True)
-            if st.button("Cerrar"): st.session_state.det_sel = None; st.rerun()
-        st.plotly_chart(px.strip(df_final.dropna(subset=[m['tablero']]), x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map={"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b"}, hover_name=m['nombre'], height=550, template="plotly_white"), use_container_width=True)
+        fig_s = px.strip(df_final.dropna(subset=[col_d]), x=m['empresa'], y=col_d, color=m['empresa'], hover_name=m['nombre'], height=500, template="plotly_white")
+        st.plotly_chart(fig_s, use_container_width=True)
 
     # --- PÁGINA: EVOLUCIÓN ---
     elif "Evolución" in st.session_state.pagina:
@@ -175,13 +202,15 @@ if df_raw is not None:
             meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
             vals = [float(str(c_data.iloc[i]).replace('%','').replace(',','.')) if str(c_data.iloc[i]) not in ['-','nan',''] else np.nan for i in range(15,27)]
             prom_e = np.nanmean(vals) if not np.all(np.isnan(vals)) else 0
-            h1, h2 = st.columns([3, 1])
-            with h1: st.title(f_nom); st.subheader(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
-            with h2: st.markdown(f'<div class="kpi-card"><span style="color:#27ae60;font-size:2rem;font-weight:bold;">{prom_e:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
+            
+            e1, e2 = st.columns([3, 1])
+            with e1: st.markdown(f"### {f_nom}"); st.caption(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
+            with e2: st.markdown(f'<div class="kpi-card"><span>Prom. Anual</span><h3 style="color:#2ecc71;">{prom_e:.1f}%</h3></div>', unsafe_allow_html=True)
+            
             fig_e = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
-            fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
+            fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="#27ae60", width=2, dash="dash"))
             fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %"))
             st.plotly_chart(fig_e, use_container_width=True)
-        else: st.info("👈 Seleccione un colaborador en el filtro superior para ver resultados.")
+        else: st.info("👈 Seleccione un colaborador en el filtro superior.")
 
-else: st.error("Error al cargar datos de la solapa DESEMPEÑO.")
+else: st.error("Falla en la lectura del Google Sheets. Verifique permisos y nombre de solapas.")
