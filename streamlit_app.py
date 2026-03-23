@@ -4,80 +4,76 @@ import plotly.express as px
 import plotly.graph_objects as go
 import urllib.parse
 import numpy as np
-from datetime import datetime
 
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Gestión de Desempeño Grupo Cenoa | RRHH", layout="wide")
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="Dashboard Grupo Cenoa V43.2", layout="wide")
 
-# Inicialización de estados
 if 'pagina' not in st.session_state: st.session_state.pagina = "👤 Desempeño Gral."
 if 'det_sel' not in st.session_state: st.session_state.det_sel = None
 
-# --- 2. CSS PREMIUM (Blindaje de Diseño Corporativo y UI Compacta) ---
+# --- 2. CSS PREMIUM (Sidebar + UX Mejorada) ---
 st.markdown("""
     <style>
-    /* Fondo y Tipografía Global */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
-
-    /* Sidebar Profesional Oscuro */
-    [data-testid="stSidebar"] { background-color: #1a202c !important; min-width: 320px !important; }
+    /* Fondo General y Fuentes */
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
+    html, body, [class*="css"] { font-family: 'Roboto', sans-serif; }
     
-    /* Cabecera Sidebar Blindada (Logo y Título BLANCOS) */
-    .sidebar-header { padding: 10px; text-align: center; margin-bottom: 5px; border-bottom: 1px solid #34495e; }
-    /* SOLUCIÓN PUNTO 1: Título Forzado a Blanco */
-    .sidebar-header h1 { color: white !important; font-size: 0.85rem; font-weight: 700; letter-spacing: 1.5px; line-height: 1.2; margin-top: 15px; }
-    /* Info de Actualización Forzada a Blanco sutil */
-    .update-text { color: #bdc3c7 !important; font-size: 0.7rem; margin-bottom: 15px; text-align: center; font-weight: 400; }
-
-    /* Botones del Menú Lateral */
+    [data-testid="stSidebar"] { background-color: #263238 !important; min-width: 320px !important; }
     [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child { display: none !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label {
-        padding: 12px 20px !important; background-color: #2c3e50 !important;
-        border-radius: 10px !important; margin-bottom: 8px !important; transition: 0.3s;
+    [data-testid="stRadio"] div[role="radiogroup"] label { padding: 12px 20px !important; background-color: transparent !important; border-radius: 10px !important; margin-bottom: 8px !important; transition: all 0.3s ease; position: relative; }
+    [data-testid="stRadio"] label p { color: #cfd8dc !important; font-size: 1.05rem !important; font-weight: 500 !important; }
+    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: bold !important; }
+
+    /* --- AJUSTE SOLICITADO: Título del Dashboard Legible --- */
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1) { margin-top: 20px !important; } /* Ajuste de margen sin logo */
+    [data-testid="stRadio"] div[role="radiogroup"] > label:nth-of-type(1)::before {
+        content: "GESTIÓN RRHH"; position: absolute; top: -35px; left: 10px;
+        color: #ffffff !important; /* COLOR CAMBIADO A BLANCO PURO PARA MÁXIMA LEGIBILIDAD */
+        font-size: 0.85rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;
     }
-    [data-testid="stRadio"] label p { color: #dee2e6 !important; font-size: 0.9rem !important; font-weight: 600 !important; }
-    [data-testid="stRadio"] div[role="radiogroup"] label[data-baseweb="radio"] { background-color: #3498db !important; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); }
-    [data-testid="stRadio"] label[data-baseweb="radio"] p { color: white !important; font-weight: 700 !important; }
 
-    /* --- CUADRANTE DE DOTACIÓN (AJUSTE SOLICITADO: COMPACTO) --- */
-    .kpi-dotacion { 
-        background: white; border-radius: 12px; padding: 5px 10px; text-align: center; 
-        border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        display: flex; flex-direction: column; justify-content: center;
-        height: 90px !important; /* SOLUCIÓN PUNTO 2: Altura reducida y compacta */
-        margin-top: 5px;
-    }
-    /* Letra "Dotación" armoniosa */
-    .kpi-dotacion span { font-size: 0.8rem; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 1px; margin-bottom: -2px;}
-    /* Número grande pero armonioso (reducido de 4.8rem a 3rem) */
-    .kpi-dotacion h2 { font-size: 3rem !important; margin: 0; color: #1a202c; font-weight: 800; line-height: 1; }
-
-    /* KPIs Generales */
-    .kpi-card { background: white; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #edf2f7; }
-    .kpi-card h4 { margin: 0; font-size: 1.4rem; color: #2d3748; }
-    .kpi-card p { margin: 0; font-size: 0.65rem; font-weight: 700; color: #a0aec0; text-transform: uppercase; }
-
-    /* Botones de Categoría (Armónicos) */
-    div.stButton > button {
-        border-radius: 10px; font-weight: 700; background-color: white; 
-        border: 1px solid #e2e8f0; height: 55px !important; font-size: 0.85rem !important;
-        transition: all 0.2s;
-    }
-    div.stButton > button:hover { border-color: #3498db; color: #3498db; background-color: #f0f9ff; }
-
-    /* Filtros profesionales */
-    div[data-baseweb="select"] > div { border-radius: 10px !important; background-color: white !important; }
+    /* Estilos de KPI Estándar */
+    .kpi-card { background-color: #ffffff; border-radius: 15px; padding: 15px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     
-    /* Botón de Actualizar sutil en sidebar */
-    .stButton>button[kind="secondary"] { background-color: #34495e !important; color: white !important; height: 35px !important; font-size: 0.75rem !important; border: none !important; }
-    .stButton>button[kind="secondary"]:hover { background-color: #4e6b8a !important; }
+    /* --- AJUSTE SOLICITADO: Cuadrante Dotación Estético y Número Gigante --- */
+    .kpi-dotacion {
+        background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); /* Fondo degradado estético */
+        border-radius: 15px;
+        padding: 10px 15px;
+        text-align: center;
+        border: 2px solid #3498db; /* Borde corporativo grueso */
+        box-shadow: 0 6px 15px rgba(52, 152, 219, 0.2); /* Sombra suave azulada */
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        min-height: 110px;
+    }
+    .kpi-dotacion h1 {
+        font-size: 4rem !important; /* NÚMERO GIGANTE: Lo que más se debe ver */
+        font-weight: 900;
+        color: #3498db; /* Azul Corporativo */
+        margin: 0; padding: 0; line-height: 1;
+    }
+    .kpi-dotacion span {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #7f8c8d; /* Gris elegante */
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-top: -5px;
+    }
+
+    .analista-box { background-color: #f8f9fa; border-left: 5px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: bold; background-color: white; height: 75px; transition: 0.3s; }
+    
+    /* Resaltado especial para botones de "Sin Dato" */
+    .btn-audit button { border: 1px dashed #e74c3c !important; color: #e74c3c !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. MOTOR DE CARGA DE DATOS (BLINDADO) ---
-@st.cache_data(ttl=600)
+# --- 3. CARGA DE DATOS (MANTENIENDO BLINDAJE) ---
+@st.cache_data(ttl=60)
 def load_all_data():
+    # URL de solo lectura para evitar problemas de carga
     URL = "https://docs.google.com/spreadsheets/d/1fXJ2UsTeOE8ipYXeP5oQYYCHRNtDJDRC/edit"
     try:
         sheet_name = urllib.parse.quote("DESEMPEÑO")
@@ -87,161 +83,147 @@ def load_all_data():
         m = {
             'nombre': df.columns[1], 'empresa': df.columns[2], 'localidad': df.columns[3],
             'area': df.columns[4], 'puesto': df.columns[5],
-            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 'tablero': '% ACUMULADO TABLERO', 'final': 'DESEMPEÑO'
+            'comp': '%PUNT.EC.1°INSTANCIA COMPETENCIAS', 
+            'tablero': '% ACUMULADO TABLERO', 
+            'final': 'DESEMPEÑO'
         }
         df[m['nombre']] = df[m['nombre']].astype(str).str.upper().str.strip()
+        
+        # Limpieza blindada de datos numéricos
         for k in ['comp', 'tablero', 'final']:
             df[m[k]] = pd.to_numeric(df[m[k]].astype(str).str.replace('-', '').str.replace('%', '').str.replace(',', '.').str.strip(), errors='coerce')
         
-        # Colores Semáforo estables
-        cmap_v = {"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b", "Sin Dato": "#bdc3c7"}
-        def get_sem(v):
-            if pd.isna(v): return "Sin Dato"
-            return "Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"
-        
-        df['Sem_Comp'] = df[m['comp']].apply(get_sem)
-        df['Sem_Tab'] = df[m['tablero']].apply(get_sem)
-        # Aseguramos que 'Inic' se calcule correctamente
+        # Generación blindada de semáforos e iniciales
+        df['Sem_Comp'] = df[m['comp']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
+        df['Sem_Tab'] = df[m['tablero']].apply(lambda v: "Sin Dato" if pd.isna(v) else ("Verde (>90%)" if v >= 90 else "Amarillo (80-90%)" if v >= 80 else "Rojo (<80%)"))
         df['Inic'] = df[m['nombre']].apply(lambda x: (str(x).split()[0][0] + (str(x).split()[1][0] if len(str(x).split())>1 else "")).upper() if pd.notna(x) and len(str(x))>3 else "")
-        return df, m, datetime.now().strftime("%d/%m/%Y %H:%M"), cmap_v
-    except Exception as e:
-        st.error(f"Error crítico de conexión: {e}")
-        return None, None, None, None
+        return df, m
+    except: return None, None
 
-df_raw, m, last_update, cmap_sem = load_all_data()
+df_raw, m = load_all_data()
 
-# --- 4. SIDEBAR (LOGO BLANCO AJUSTADO + NAVEGACIÓN BLINDADA) ---
+# --- 4. SIDEBAR (LOGO ELIMINADO) ---
 with st.sidebar:
-    st.markdown('<div class="sidebar-header">', unsafe_allow_html=True)
-    
-    # SOLUCIÓN PUNTO 1: Mostrar Logo Cenoa Blanco adjuntado
-    try:
-        # Asegúrate de que el archivo 'LOGO CENOA BLANCO.png' esté en la misma carpeta que el script
-        st.image("LOGO CENOA BLANCO.png", width=120) 
-    except:
-        st.markdown("🖼️ **[LOGO GRUPO CENOA]**")
-    
-    # Título blindado en blanco corporativo por CSS
-    st.markdown('<h1>GESTIÓN DE DESEMPEÑO<br>GRUPO CENOA</h1></div>', unsafe_allow_html=True)
-    
-    # Actualización en blanco sutil por CSS
-    st.markdown(f'<p class="update-text">🕒 Datos actualizados: {last_update}</p>', unsafe_allow_html=True)
-    if st.button("🔄 ACTUALIZAR AHORA", use_container_width=True, type="secondary"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.title("Grupo Cenoa")
+    st.caption("Dashboard 2026 | V43.2 (Analytics Focus)")
     menu_items = ["👤 Desempeño Gral.", "🧠 Competencias", "📑 Tableros", "📈 Evolución"]
+    
+    # Navegación blindada
     seleccion = st.radio("Nav", menu_items, index=menu_items.index(st.session_state.pagina) if st.session_state.pagina in menu_items else 0, label_visibility="collapsed")
     if st.session_state.pagina != seleccion:
         st.session_state.pagina = seleccion
         st.session_state.det_sel = None
         st.rerun()
 
-# --- 5. PANEL PRINCIPAL (BLINDADO) ---
+# --- 5. PANEL PRINCIPAL ---
 if df_raw is not None:
-    # FILTROS Y DOTACIÓN (ARMONÍA VISUAL CON KPI COMPACTO)
-    f_cols = st.columns([1.5, 1.5, 1.5, 2.5, 1.2]) # Mantenemos el ancho 1.2 para dotación
-    with f_cols[0]: f_emp = st.selectbox("🏢 Empresa", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
-    with f_cols[1]: f_loc = st.selectbox("📍 Localidad", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
-    with f_cols[2]: f_are = st.selectbox("📂 Área", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
+    st.header(st.session_state.pagina.split(" ", 1)[1])
+
+    # FILTROS ESTILIZADOS
+    cf1, cf2, cf3, cf4, ckpi = st.columns([1.5, 1.5, 1.5, 2.5, 1.2]) # Ajuste ligero de ancho para KPI dotación
+    with cf1: f_emp = st.selectbox("EMPRESA", ["Todas"] + sorted(df_raw[m['empresa']].dropna().unique().tolist()))
+    with cf2: f_loc = st.selectbox("LOCALIDAD", ["Todas"] + sorted(df_raw[m['localidad']].dropna().unique().tolist()))
+    with cf3: f_are = st.selectbox("ÁREA", ["Todas"] + sorted(df_raw[m['area']].dropna().unique().tolist()))
     
+    # Lógica de filtrado blindada
     df_f = df_raw.copy()
     if f_emp != "Todas": df_f = df_f[df_f[m['empresa']] == f_emp]
     if f_loc != "Todas": df_f = df_f[df_f[m['localidad']] == f_loc]
     if f_are != "Todas": df_f = df_f[df_f[m['area']] == f_are]
 
     nombres_disp = sorted(df_f[m['nombre']].unique().tolist())
-    with f_cols[3]: f_nom = st.selectbox("🔍 Colaborador", ["Todos"] + nombres_disp)
+    with cf4: f_nom = st.selectbox("COLABORADOR", ["Todos"] + nombres_disp)
     df_final = df_f if f_nom == "Todos" else df_f[df_f[m['nombre']] == f_nom]
     
-    with f_cols[4]:
-        # SOLUCIÓN PUNTO 2: KPI DOTACIÓN COMPACTO (Ajustado via CSS .kpi-dotacion)
-        st.markdown(f'<div class="kpi-dotacion"><span>Dotación</span><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
-    
+    # --- AJUSTE SOLICITADO: Renderizado de Dotación Estético y Gigante ---
+    with ckpi:
+        st.markdown(f'<div class="kpi-dotacion"><h1>{len(df_final)}</h1><span>DOTACIÓN</span></div>', unsafe_allow_html=True)
     st.divider()
 
-    # --- LÓGICA DE PÁGINAS (BLINDADA) ---
-    
-    # 👤 DESEMPEÑO GRAL
+    # --- PÁGINA: DESEMPEÑO GRAL ---
     if "Desempeño Gral." in st.session_state.pagina:
-        st.subheader("Burbujas de Desempeño: Competencias vs. Tablero")
-        cats = {"ESTRELLA": df_final[df_final[m['final']] >= 90], "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)], "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)], "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)], "RIESGO": df_final[df_final[m['final']] < 60]}
-        c_btns = st.columns(5)
-        for i, (k, v) in enumerate(cats.items()):
-            if c_btns[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
-        if st.session_state.det_sel in cats:
-            st.dataframe(cats[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
+        cats_g = {"ESTRELLA": df_final[df_final[m['final']] >= 90], "PROFESIONAL": df_final[(df_final[m['final']] >= 80) & (df_final[m['final']] < 90)], "CLAVE": df_final[(df_final[m['final']] >= 70) & (df_final[m['final']] < 80)], "ENIGMA": df_final[(df_final[m['final']] >= 60) & (df_final[m['final']] < 70)], "RIESGO": df_final[df_final[m['final']] < 60]}
+        cb = st.columns(5)
+        for i, (k, v) in enumerate(cats_g.items()):
+            if cb[i].button(f"{k}\n({len(v)})"): st.session_state.det_sel = k
+        if st.session_state.det_sel in cats_g:
+            st.write(f"### Detalle: {st.session_state.det_sel}"); st.dataframe(cats_g[st.session_state.det_sel][[m['nombre'], m['puesto'], m['final']]], use_container_width=True)
             if st.button("✖️ Cerrar Detalle"): st.session_state.det_sel = None; st.rerun()
         
-        st.markdown(f'<div class="analista-box"><strong>📊 People Analytics:</strong> El promedio general es de <b>{df_final[m["final"]].mean():.1f}%</b>.</div>', unsafe_allow_html=True)
+        if not df_final.empty:
+            st.markdown(f'<div class="analista-box"><strong>📝 Analista Virtual:</strong> Promedio del grupo filtrado: <b>{df_final[m["final"]].mean():.1f}%</b></div>', unsafe_allow_html=True)
         
-        if not df_final.dropna(subset=[m['comp'], m['tablero']]).empty:
-            fig_bub = px.scatter(df_final.dropna(subset=[m['comp'], m['tablero']]), x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
-            fig_bub.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
-            st.plotly_chart(fig_bub, use_container_width=True)
-        else: st.warning("No hay datos suficientes para graficar las burbujas.")
+        # Gráfico blindado contra NaNs
+        df_bub = df_final.dropna(subset=[m['comp'], m['tablero']])
+        if not df_bub.empty:
+            fig = px.scatter(df_bub, x=m['tablero'], y=m['comp'], color=m['area'], text='Inic', hover_name=m['nombre'], height=600, template="plotly_white")
+            fig.update_traces(textposition='middle center', textfont=dict(size=10, color='white', family="Arial Black"), marker=dict(size=35, opacity=0.8, line=dict(width=1, color='white')))
+            st.plotly_chart(fig, use_container_width=True)
+        else: st.warning("No hay datos suficientes de Competencias y Tablero para mostrar la matriz.")
 
-    # 🧠 COMPETENCIAS / 📑 TABLEROS
-    elif st.session_state.pagina in ["🧠 Competencias", "📑 Tableros"]:
-        is_comp = "Competencias" in st.session_state.pagina
-        col_d = m['comp'] if is_comp else m['tablero']
-        sem_d = 'Sem_Comp' if is_comp else 'Sem_Tab'
-        evals = df_final[col_d].notna().sum(); no_evals = df_final[col_d].isna().sum()
+    # --- PÁGINA: COMPETENCIAS ---
+    elif "Competencias" in st.session_state.pagina:
+        evals = df_final[m['comp']].notna().sum(); no_evals = df_final[m['comp']].isna().sum(); prom_c = df_final[m['comp']].mean() if evals > 0 else 0
+        q1, q2, q3, q4 = st.columns(4)
+        with q1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
+        with q2: st.markdown(f'<div class="kpi-card"><b>EVALUADOS</b><br><h3 style="color:#3498db;">{evals}</h3></div>', unsafe_allow_html=True)
+        with q3:
+            st.markdown('<div class="btn-audit">', unsafe_allow_html=True)
+            if st.button(f"SIN EVALUAR\n({no_evals})"): st.session_state.det_sel = "AUDIT_COMP"
+            st.markdown('</div>', unsafe_allow_html=True)
+        with q4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO COMP.</b><br><h3 style="color:#6f42c1;">{prom_c:.1f}%</h3></div>', unsafe_allow_html=True)
         
-        # Cuadrantes Superiores
-        q = st.columns(4)
-        q[0].markdown(f'<div class="kpi-card"><p>Total</p><h4>{len(df_final)}</h4></div>', unsafe_allow_html=True)
-        q[1].markdown(f'<div class="kpi-card"><p>Evaluados</p><h4 style="color:#3498db;">{evals}</h4></div>', unsafe_allow_html=True)
-        q[2].markdown(f'<div class="kpi-card"><p>Sin Dato</p><h4 style="color:#e74c3c;">{no_evals}</h4></div>', unsafe_allow_html=True)
-        q[3].markdown(f'<div class="kpi-card"><p>Promedio %</p><h4 style="color:#2ecc71;">{df_final[col_d].mean():.1f}%</h4></div>', unsafe_allow_html=True)
+        if st.session_state.det_sel == "AUDIT_COMP":
+            st.error(f"⚠️ Colaboradores sin Evaluación ({no_evals})")
+            st.dataframe(df_final[df_final[m['comp']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
+            if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Botones de Categoría Armónicos
-        cats_sub = {"CRÍTICO": df_final[df_final[col_d] < 70], "ESPERADO": df_final[(df_final[col_d] >= 70) & (df_final[col_d] < 85)], "ALTO": df_final[(df_final[col_d] >= 85) & (df_final[col_d] < 95)], "SOBRESALIENTE": df_final[df_final[col_d] >= 95], "SIN DATO": df_final[df_final[col_d].isna()]}
-        
-        b_cols = st.columns(5)
-        for i, (k, v) in enumerate(cats_sub.items()):
-            if b_cols[i].button(f"{k} ({len(v)})"): st.session_state.det_sel = k
-        
-        if st.session_state.det_sel in cats_sub:
-            st.dataframe(cats_sub[st.session_state.det_sel][[m['nombre'], m['empresa'], col_d]], use_container_width=True)
-            if st.button("✖️ Cerrar Lista"): st.session_state.det_sel = None; st.rerun()
-            
         st.divider()
-        st.subheader("Distribución de Resultados por Empresa")
-        
-        if evals > 0:
-            fig_strip = px.strip(df_final.dropna(subset=[col_d]), x=m['empresa'], y=col_d, color=sem_d, color_discrete_map=cmap_sem, hover_name=m['nombre'], height=550, template="plotly_white")
-            fig_strip.update_layout(showlegend=False)
-            st.plotly_chart(fig_strip, use_container_width=True)
-        else: st.warning("No hay datos de resultados para graficar.")
+        # Gráfico blindado contra NaNs
+        df_strip = df_final.dropna(subset=[m['comp']])
+        if not df_strip.empty:
+            st.plotly_chart(px.strip(df_strip, x=m['empresa'], y=m['comp'], color='Sem_Comp', color_discrete_map={"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b"}, hover_name=m['nombre'], height=500, template="plotly_white"), use_container_width=True)
 
-    # 📈 EVOLUCIÓN
+    # --- PÁGINA: TABLEROS ---
+    elif "Tableros" in st.session_state.pagina:
+        tienen = df_final[m['tablero']].notna().sum(); no_tienen = df_final[m['tablero']].isna().sum(); prom_t = df_final[m['tablero']].mean() if tienen > 0 else 0
+        qt1, qt2, qt3, qt4 = st.columns(4)
+        with qt1: st.markdown(f'<div class="kpi-card"><b>TOTAL</b><br><h3>{len(df_final)}</h3></div>', unsafe_allow_html=True)
+        with qt2: st.markdown(f'<div class="kpi-card"><b>CON TABLERO</b><br><h3 style="color:#3498db;">{tienen}</h3></div>', unsafe_allow_html=True)
+        with qt3:
+            st.markdown('<div class="btn-audit">', unsafe_allow_html=True)
+            if st.button(f"SIN TABLERO\n({no_tienen})"): st.session_state.det_sel = "AUDIT_TAB"
+            st.markdown('</div>', unsafe_allow_html=True)
+        with qt4: st.markdown(f'<div class="kpi-card"><b>PROMEDIO TABLERO</b><br><h3 style="color:#27ae60;">{prom_t:.1f}%</h3></div>', unsafe_allow_html=True)
+        
+        if st.session_state.det_sel == "AUDIT_TAB":
+            st.error(f"⚠️ Colaboradores sin Tablero ({no_tienen})")
+            st.dataframe(df_final[df_final[m['tablero']].isna()][[m['nombre'], m['empresa'], m['area'], m['puesto']]], use_container_width=True)
+            if st.button("✖️ Cerrar Auditoría"): st.session_state.det_sel = None; st.rerun()
+        
+        st.divider()
+        # Gráfico blindado contra NaNs
+        df_strip_t = df_final.dropna(subset=[m['tablero']])
+        if not df_strip_t.empty:
+            st.plotly_chart(px.strip(df_strip_t, x=m['empresa'], y=m['tablero'], color='Sem_Tab', color_discrete_map={"Verde (>90%)": "#27ae60", "Amarillo (80-90%)": "#f1c40f", "Rojo (<80%)": "#c0392b"}, hover_name=m['nombre'], height=550, template="plotly_white"), use_container_width=True)
+
+    # --- PÁGINA: EVOLUCIÓN ---
     elif "Evolución" in st.session_state.pagina:
         if f_nom != "Todos":
             c_data = df_final.iloc[0]
             meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-            vals = []
-            # Aseguramos blindaje en la lectura de columnas de meses (Indices 15 a 26)
-            for i in range(15, 27):
-                try:
-                    vals.append(float(str(c_data.iloc[i]).replace('%','').replace(',','.')))
-                except:
-                    vals.append(np.nan)
-            
-            e1, e2 = st.columns([3, 1])
-            with e1: st.markdown(f"### {f_nom}"); st.caption(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
-            
-            prom_e = np.nanmean(vals) if not np.all(np.isnan(vals)) else 0
-            with e2: st.markdown(f'<div class="kpi-card"><p>Prom. Anual</p><h4 style="color:#2ecc71;">{prom_e:.1f}%</h4></div>', unsafe_allow_html=True)
-            
-            if evals > 0:
-                fig_evol = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
-                fig_evol.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="#27ae60", width=2, dash="dash"))
-                st.plotly_chart(fig_evol.update_layout(height=450, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %")), use_container_width=True)
-            else: st.warning("No hay datos históricos para este colaborador.")
-        else: st.info("👈 Seleccione un colaborador en el filtro superior.")
+            # Blindaje en la conversión histórica
+            try:
+                vals = [float(str(c_data.iloc[i]).replace('%','').replace(',','.')) if str(c_data.iloc[i]) not in ['-','nan',''] else np.nan for i in range(15,27)]
+                prom_e = np.nanmean(vals) if not np.all(np.isnan(vals)) else 0
+                h1, h2 = st.columns([3, 1])
+                with h1: st.title(f_nom); st.subheader(f"{c_data[m['puesto']]} | {c_data[m['empresa']]}")
+                with h2: st.markdown(f'<div class="kpi-card"><span style="color:#27ae60;font-size:2rem;font-weight:bold;">{prom_e:.1f}%</span><br>PROM. ANUAL</div>', unsafe_allow_html=True)
+                fig_e = go.Figure(go.Scatter(x=meses, y=vals, mode='lines+markers+text', line=dict(color='#3498db', width=4), text=[f"{v:.0f}%" if not np.isnan(v) else "" for v in vals], textposition="top center"))
+                fig_e.add_shape(type="line", x0=0, y0=100, x1=11, y1=100, line=dict(color="green", width=2, dash="dash"))
+                fig_e.update_layout(height=500, template="plotly_white", yaxis=dict(range=[0, 165], title="Alcance %"))
+                st.plotly_chart(fig_e, use_container_width=True)
+            except Exception as e: st.error(f"Error al procesar historial: {e}")
+        else: st.info("👈 Seleccione un colaborador en el filtro superior para ver resultados.")
 
-else: st.error("Falla crítica al conectar con Google Sheets de Cenoa.")
+else: st.error("Error al cargar datos de la solapa DESEMPEÑO.")
